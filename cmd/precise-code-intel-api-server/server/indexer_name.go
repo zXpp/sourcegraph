@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 )
@@ -42,8 +43,7 @@ func readIndexerName(r io.Reader) (string, error) {
 		return "", err
 	}
 	if isPrefix {
-		// OOF strange condition in these parts
-		return "", err
+		return "", fmt.Errorf("metadata vertex exceeds buffer")
 	}
 
 	meta := MetaDataVertex{}

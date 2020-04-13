@@ -18,7 +18,7 @@ type APILocation struct {
 	Range        bundles.Range `json:"range"`
 }
 
-func resolveLocations(dump db.Dump, locations []bundles.Location) []ResolvedLocation {
+func resolveLocationsWithDump(dump db.Dump, locations []bundles.Location) []ResolvedLocation {
 	var resolvedLocations []ResolvedLocation
 	for _, location := range locations {
 		resolvedLocations = append(resolvedLocations, ResolvedLocation{
@@ -31,35 +31,40 @@ func resolveLocations(dump db.Dump, locations []bundles.Location) []ResolvedLoca
 	return resolvedLocations
 }
 
-func (s *Server) resolveLocations(locations []bundles.Location) ([]ResolvedLocation, error) {
-	uniq := map[int]struct{}{}
-	for _, l := range locations {
-		uniq[l.DumpID] = struct{}{}
-	}
-
-	var ids []int
-	for k := range uniq {
-		ids = append(ids, k)
-	}
-
-	dumpsByID, err := s.db.GetDumps(ids)
+func resolveLocations(db *db.DB, locations []bundles.Location) ([]ResolvedLocation, error) {
+	dumpsByID, err := db.GetDumps(dumpIDs(locations))
 	if err != nil {
 		return nil, err
 	}
 
-	var thingers []ResolvedLocation
+	var resolvedLocations []ResolvedLocation
 	for _, location := range locations {
-		thingers = append(thingers, ResolvedLocation{
-			Dump:  dumpsByID[location.DumpID],
-			Path:  dumpsByID[location.DumpID].Root + location.Path,
+		dump := dumpsByID[location.DumpID]
+
+		resolvedLocations = append(resolvedLocations, ResolvedLocation{
+			Dump:  dump,
+			Path:  dump.Root + location.Path,
 			Range: location.Range,
 		})
 	}
 
-	return thingers, nil
+	return resolvedLocations, nil
 }
 
-func (s *Server) serializeLocations(resolvedLocations []ResolvedLocation) ([]APILocation, error) {
+func dumpIDs(locations []bundles.Location) []int {
+	uniqueIDs := map[int]struct{}{}
+	for _, l := range locations {
+		uniqueIDs[l.DumpID] = struct{}{}
+	}
+
+	var ids []int
+	for k := range uniqueIDs {
+		ids = append(ids, k)
+	}
+
+	return ids
+}
+func serializeLocations(resolvedLocations []ResolvedLocation) ([]APILocation, error) {
 	var apiLocations []APILocation
 	for _, res := range resolvedLocations {
 		apiLocations = append(apiLocations, APILocation{

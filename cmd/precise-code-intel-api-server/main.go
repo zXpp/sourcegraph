@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server"
+	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 	"github.com/sourcegraph/sourcegraph/internal/conf"
 	"github.com/sourcegraph/sourcegraph/internal/debugserver"
@@ -21,7 +22,7 @@ func main() {
 
 	var (
 		janitorInterval  = mustParseInterval(rawJanitorInterval, "JANITOR_INTERVAL")
-		bundelManagerURL = mustGet(rawBundleManagerURL, "BUNDLE_MANAGER_URL")
+		bundleManagerURL = mustGet(rawBundleManagerURL, "BUNDLE_MANAGER_URL")
 	)
 
 	db := mustInitializeDatabase()
@@ -32,10 +33,10 @@ func main() {
 	}
 
 	serverInst := server.New(server.ServerOpts{
-		Host:             host,
-		Port:             3186,
-		BundleManagerURL: bundelManagerURL,
-		DB:               db,
+		Host:                host,
+		Port:                3186,
+		DB:                  db,
+		BundleManagerClient: bundles.New(bundleManagerURL),
 	})
 
 	janitorInst := server.NewJanitor(server.JanitorOpts{

@@ -22,7 +22,7 @@ type Dump struct {
 	TracingContext    string     `json:"tracingContext"`
 	RepositoryID      int        `json:"repositoryId"`
 	Indexer           string     `json:"indexer"`
-	// TODO
+	// TODO - add field?
 	// ProcessedAt       time.Time  `json:"processedAt"`
 }
 

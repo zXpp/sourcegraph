@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/inconshreveable/log15"
@@ -42,8 +41,7 @@ func (j *Janitor) step() error {
 	}
 
 	for _, id := range ids {
-		// TODO - log instead
-		fmt.Printf("> RESET %#v\n", id)
+		log15.Info("Reset stalled upload", "uploadID", id)
 	}
 
 	return nil

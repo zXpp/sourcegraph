@@ -1,12 +1,14 @@
 package server
 
 import (
+	"strings"
+
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 )
 
-func (s *Server) getDefs(file string, line, character, uploadID int) ([]ResolvedLocation, error) {
-	dump, bundleClient, exists, err := s.getDumpAndBundleClient(uploadID)
+func (s *Server) definitions(file string, line, character, uploadID int) ([]ResolvedLocation, error) {
+	dump, exists, err := s.db.GetDumpByID(uploadID)
 	if err != nil {
 		return nil, err
 	}
@@ -14,20 +16,30 @@ func (s *Server) getDefs(file string, line, character, uploadID int) ([]Resolved
 		return nil, ErrMissingDump
 	}
 
-	return s.getDefsRaw(dump, bundleClient, pathRelativeToRoot(dump.Root, file), line, character)
+	pathInBundle := strings.TrimPrefix(file, dump.Root)
+	bundleClient := s.bundleManagerClient.BundleClient(dump.ID)
+	return s.definitionsRaw(dump, bundleClient, pathInBundle, line, character)
 }
 
-func (s *Server) getDefsRaw(dump db.Dump, db *bundles.BundleClient, pathInDb string, line, character int) ([]ResolvedLocation, error) {
-	locations, err := db.Definitions(pathInDb, line, character)
+func (s *Server) definitionRaw(dump db.Dump, bundleClient *bundles.BundleClient, pathInBundle string, line, character int) (ResolvedLocation, bool, error) {
+	resolved, err := s.definitionsRaw(dump, bundleClient, pathInBundle, line, character)
+	if err != nil || len(resolved) == 0 {
+		return ResolvedLocation{}, false, err
+	}
+
+	return resolved[0], true, nil
+}
+
+func (s *Server) definitionsRaw(dump db.Dump, bundleClient *bundles.BundleClient, pathInBundle string, line, character int) ([]ResolvedLocation, error) {
+	locations, err := bundleClient.Definitions(pathInBundle, line, character)
 	if err != nil {
 		return nil, err
 	}
-
 	if len(locations) > 0 {
-		return resolveLocations(dump, locations), nil
+		return resolveLocationsWithDump(dump, locations), nil
 	}
 
-	rangeMonikers, err := db.MonikersByPosition(pathInDb, line, character)
+	rangeMonikers, err := bundleClient.MonikersByPosition(pathInBundle, line, character)
 	if err != nil {
 		return nil, err
 	}
@@ -35,27 +47,24 @@ func (s *Server) getDefsRaw(dump db.Dump, db *bundles.BundleClient, pathInDb str
 	for _, monikers := range rangeMonikers {
 		for _, moniker := range monikers {
 			if moniker.Kind == "import" {
-				results, _, err := s.lookupMoniker(dump.ID, pathInDb, moniker, "definition", nil, nil)
+				locations, _, err := lookupMoniker(s.db, s.bundleManagerClient, dump.ID, pathInBundle, moniker, "definition", nil, nil)
 				if err != nil {
 					return nil, err
 				}
-
-				if len(results) > 0 {
-					// TODO - unify these
-					return s.resolveLocations(results)
+				if len(locations) > 0 {
+					return locations, nil
 				}
 			} else {
 				// This symbol was not imported from another database. We search the definitions
 				// table of our own database in case there was a definition that wasn't properly
 				// attached to a result set but did have the correct monikers attached.
 
-				results, _, err := db.MonikerResults("definition", moniker.Scheme, moniker.Identifier, nil, nil)
+				locations, _, err := bundleClient.MonikerResults("definition", moniker.Scheme, moniker.Identifier, nil, nil)
 				if err != nil {
 					return nil, err
 				}
-
-				if len(results) > 0 {
-					return resolveLocations(dump, results), nil
+				if len(locations) > 0 {
+					return resolveLocationsWithDump(dump, locations), nil
 				}
 			}
 		}

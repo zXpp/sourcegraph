@@ -1,9 +1,14 @@
 package server
 
 import (
-	"fmt"
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
+	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 )
 
 type Cursor struct {
@@ -25,10 +30,66 @@ type Cursor struct {
 	SkipResultsInDump      int                   // same-repo/remote-repo
 }
 
-func decodeCursor(raw string) (Cursor, error) {
-	return Cursor{}, fmt.Errorf("Unimplemented") // TODO - implement
+func decodeCursor(rawEncoded string) (cursor Cursor, err error) {
+	raw, err := base64.RawURLEncoding.DecodeString(rawEncoded)
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal([]byte(raw), &cursor)
+	return
 }
 
 func encodeCursor(cursor Cursor) string {
-	return "" // TODO - implement
+	rawEncoded, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(rawEncoded)
+}
+
+func decodeCursorFromRequest(r *http.Request, db *db.DB, bundleManagerClient *bundles.BundleManagerClient) (Cursor, error) {
+	q := r.URL.Query()
+	file := q.Get("path")
+	line, _ := strconv.Atoi(q.Get("line"))
+	character, _ := strconv.Atoi(q.Get("character"))
+	uploadID, _ := strconv.Atoi(q.Get("uploadId"))
+	encoded := q.Get("cursor")
+
+	if encoded != "" {
+		cursor, err := decodeCursor(encoded)
+		if err != nil {
+			return Cursor{}, err
+		}
+
+		return cursor, nil
+	}
+
+	dump, exists, err := db.GetDumpByID(uploadID)
+	if err != nil {
+		return Cursor{}, err
+	}
+	if !exists {
+		return Cursor{}, ErrMissingDump
+	}
+
+	pathInBundle := strings.TrimPrefix(file, dump.Root)
+	bundleClient := bundleManagerClient.BundleClient(dump.ID)
+
+	rangeMonikers, err := bundleClient.MonikersByPosition(pathInBundle, line, character)
+	if err != nil {
+		return Cursor{}, err
+	}
+
+	var flattened []bundles.MonikerData
+	for _, monikers := range rangeMonikers {
+		flattened = append(flattened, monikers...)
+	}
+
+	return Cursor{
+		Phase:       "same-dump",
+		DumpID:      dump.ID,
+		Path:        pathInBundle,
+		Line:        line,
+		Character:   character,
+		Monikers:    flattened,
+		SkipResults: 0,
+	}, nil
 }

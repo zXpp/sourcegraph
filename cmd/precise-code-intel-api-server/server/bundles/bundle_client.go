@@ -97,7 +97,6 @@ func (c *BundleClient) MonikerResults(modelType, scheme, identifier string, skip
 		Count     int        `json:"count"`
 	}{}
 
-	// TODO
 	err = c.request("monikerResults", args, &target)
 	locations = target.Locations
 	count = target.Count
@@ -118,7 +117,7 @@ func (c *BundleClient) PackageInformation(path, packageInformationId string) (ta
 func (c *BundleClient) request(path string, qs map[string]interface{}, target interface{}) error {
 	values := url.Values{}
 	for k, v := range qs {
-		values[k] = []string{fmt.Sprintf("%v", v)} // TODO - check serialization here
+		values[k] = []string{fmt.Sprintf("%v", v)}
 	}
 
 	url, err := url.Parse(fmt.Sprintf("%s/dbs/%d/%s", c.bundleManagerURL, c.bundleID, path))

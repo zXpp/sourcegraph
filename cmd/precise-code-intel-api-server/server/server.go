@@ -22,26 +22,28 @@ import (
 
 const DefaultUploadPageSize = 50
 
+var ErrMissingDump = fmt.Errorf("no dump")
+
 type Server struct {
 	host                string
 	port                int
-	bundleManagerClient *bundles.BundleManagerClient
 	db                  *db.DB
+	bundleManagerClient *bundles.BundleManagerClient
 }
 
 type ServerOpts struct {
 	Host                string
 	Port                int
-	BundleManagerClient *bundles.BundleManagerClient
 	DB                  *db.DB
+	BundleManagerClient *bundles.BundleManagerClient
 }
 
 func New(opts ServerOpts) *Server {
 	return &Server{
 		host:                opts.Host,
 		port:                opts.Port,
-		bundleManagerClient: opts.BundleManagerClient,
 		db:                  opts.DB,
+		bundleManagerClient: opts.BundleManagerClient,
 	}
 }
 
@@ -221,7 +223,7 @@ func (s *Server) handleDefinitions(w http.ResponseWriter, r *http.Request) {
 	character, _ := strconv.Atoi(q.Get("character"))
 	uploadID, _ := strconv.Atoi(q.Get("uploadId"))
 
-	defs, err := s.getDefs(file, line, character, uploadID)
+	defs, err := s.definitions(file, line, character, uploadID)
 	if err != nil {
 		if err == ErrMissingDump {
 			http.Error(w, "no such dump", http.StatusNotFound)
@@ -233,7 +235,7 @@ func (s *Server) handleDefinitions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outers, err := s.serializeLocations(defs)
+	outers, err := serializeLocations(defs)
 	if err != nil {
 		log15.Error("Failed to resolve locations", "error", err)
 		http.Error(w, fmt.Sprintf("failed to resolve locations: %s", err.Error()), http.StatusInternalServerError)
@@ -250,7 +252,7 @@ func (s *Server) handleReferences(w http.ResponseWriter, r *http.Request) {
 	commit := q.Get("commit")
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	cursor, err := s.decodeCursor(r)
+	cursor, err := decodeCursorFromRequest(r, s.db, s.bundleManagerClient)
 	if err != nil {
 		if err == ErrMissingDump {
 			http.Error(w, "no such dump", http.StatusNotFound)
@@ -262,14 +264,14 @@ func (s *Server) handleReferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	locations, newCursor, hasNewCursor, err := s.getRefs(repositoryID, commit, limit, cursor)
+	locations, newCursor, hasNewCursor, err := s.references(repositoryID, commit, limit, cursor)
 	if err != nil {
 		log15.Error("Failed to handle references request", "error", err)
 		http.Error(w, fmt.Sprintf("failed to handle references request: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
-	outers, err := s.serializeLocations(locations)
+	outers, err := serializeLocations(locations)
 	if err != nil {
 		log15.Error("Failed to resolve locations", "error", err)
 		http.Error(w, fmt.Sprintf("failed to resolve locations: %s", err.Error()), http.StatusInternalServerError)
@@ -292,7 +294,7 @@ func (s *Server) handleHover(w http.ResponseWriter, r *http.Request) {
 	character, _ := strconv.Atoi(q.Get("character"))
 	uploadID, _ := strconv.Atoi(q.Get("uploadId"))
 
-	text, rn, ok, err := s.getHover(file, line, character, uploadID)
+	text, rn, exists, err := s.hover(file, line, character, uploadID)
 	if err != nil {
 		if err == ErrMissingDump {
 			http.Error(w, "no such dump", http.StatusNotFound)
@@ -304,7 +306,7 @@ func (s *Server) handleHover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !ok {
+	if !exists {
 		writeJSON(w, nil)
 	} else {
 		writeJSON(w, map[string]interface{}{"text": text, "range": rn})
@@ -385,8 +387,8 @@ func sanitizeRoot(s string) string {
 	if s == "" || s == "/" {
 		return ""
 	}
-	if strings.HasSuffix(s, "/") {
-		return s
+	if !strings.HasSuffix(s, "/") {
+		s += "/"
 	}
-	return s + "/"
+	return s
 }

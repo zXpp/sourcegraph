@@ -169,7 +169,12 @@ func (db *DB) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTi
 		uploads = append(uploads, upload)
 	}
 
-	count := len(uploads) // TODO - implement
+	var count int
+	countQuery := sqlf.Sprintf("SELECT COUNT(1) FROM lsif_uploads u WHERE %s", sqlf.Join(conds, " AND "))
+	if err := db.db.QueryRowContext(context.Background(), countQuery.Query(sqlf.PostgresBindVar), countQuery.Args()...).Scan(&count); err != nil {
+		return nil, 0, err
+	}
+
 	return uploads, count, nil
 }
 

@@ -1,9 +1,13 @@
 package server
 
-import "github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
+import (
+	"strings"
 
-func (s *Server) getHover(file string, line, character, uploadID int) (string, bundles.Range, bool, error) {
-	dump, bundleClient, exists, err := s.getDumpAndBundleClient(uploadID)
+	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
+)
+
+func (s *Server) hover(file string, line, character, uploadID int) (string, bundles.Range, bool, error) {
+	dump, exists, err := s.db.GetDumpByID(uploadID)
 	if err != nil {
 		return "", bundles.Range{}, false, err
 	}
@@ -11,8 +15,10 @@ func (s *Server) getHover(file string, line, character, uploadID int) (string, b
 		return "", bundles.Range{}, false, ErrMissingDump
 	}
 
-	pathx := pathRelativeToRoot(dump.Root, file)
-	text, rn, exists, err := bundleClient.Hover(pathx, line, character)
+	pathInBundle := strings.TrimPrefix(file, dump.Root)
+	bundleClient := s.bundleManagerClient.BundleClient(dump.ID)
+
+	text, rn, exists, err := bundleClient.Hover(pathInBundle, line, character)
 	if err != nil {
 		return "", bundles.Range{}, false, err
 	}
@@ -20,18 +26,13 @@ func (s *Server) getHover(file string, line, character, uploadID int) (string, b
 		return text, rn, true, nil
 	}
 
-	resolved, err := s.getDefsRaw(dump, bundleClient, pathx, line, character)
-	if err != nil {
+	definition, exists, err := s.definitionRaw(dump, bundleClient, pathInBundle, line, character)
+	if err != nil || !exists {
 		return "", bundles.Range{}, false, err
 	}
-	if len(resolved) == 0 {
-		return "", bundles.Range{}, false, nil
-	}
-	definition := resolved[0]
 
-	return s.bundleManagerClient.BundleClient(definition.Dump.ID).Hover(
-		pathRelativeToRoot(definition.Dump.Root, definition.Path),
-		definition.Range.Start.Line,
-		definition.Range.Start.Character,
-	)
+	pathInDefinitionBundle := strings.TrimPrefix(definition.Path, definition.Dump.Root)
+	DefinitionbundleClient := s.bundleManagerClient.BundleClient(definition.Dump.ID)
+
+	return DefinitionbundleClient.Hover(pathInDefinitionBundle, definition.Range.Start.Line, definition.Range.Start.Character)
 }
