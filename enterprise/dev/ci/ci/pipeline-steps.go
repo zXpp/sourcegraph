@@ -19,7 +19,7 @@ var allDockerImages = []string{
 	"searcher",
 	"server",
 	"symbols",
-	"precise-code-intel/api-server",
+	"precise-code-intel/server",
 	"precise-code-intel/bundle-manager",
 	"precise-code-intel/worker",
 }

@@ -18,7 +18,7 @@ export CGO_ENABLED=0
 cp -a ./cmd/precise-code-intel "$OUTPUT"
 
 echo "--- docker build"
-docker build -f cmd/precise-code-intel/api-server/Dockerfile -t "$IMAGE" "$OUTPUT" \
+docker build -f cmd/precise-code-intel/server/Dockerfile -t "$IMAGE" "$OUTPUT" \
     --progress=plain \
     --build-arg COMMIT_SHA \
     --build-arg DATE \

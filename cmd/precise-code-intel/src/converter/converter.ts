@@ -30,7 +30,7 @@ import * as fs from 'mz/fs'
 const pipeline = promisify(_pipeline)
 
 /**
- * Runs the worker process that converts LSIF uploads.
+ * Runs the converter process that converts LSIF uploads.
  *
  * @param logger The logger instance.
  */
@@ -42,7 +42,7 @@ async function main(logger: Logger): Promise<void> {
     const fetchConfiguration = await waitForConfiguration(logger)
 
     // Configure distributed tracing
-    const tracer = createTracer('precise-code-intel-worker', fetchConfiguration())
+    const tracer = createTracer('precise-code-intel-converter', fetchConfiguration())
 
     // Ensure storage roots exist
     await ensureDirectory(settings.STORAGE_ROOT)
@@ -109,8 +109,8 @@ async function main(logger: Logger): Promise<void> {
 
                         // Remove overlapping dumps that would cause a unique index error once this upload has
                         // transitioned into the completed state. As this is done in a transaction, we do not
-                        // delete the files on disk right away. These files will be cleaned up by a worker in
-                        // a future cleanup task.
+                        // delete the files on disk right away. These files will be cleaned up by a converter
+                        // in a future cleanup task.
                         await dumpManager.deleteOverlappingDumps(
                             upload.repositoryId,
                             upload.commit,
@@ -162,7 +162,7 @@ async function main(logger: Logger): Promise<void> {
 }
 
 // Initialize logger
-const appLogger = createLogger('precise-code-intel-worker')
+const appLogger = createLogger('precise-code-intel-converter')
 
 // Launch!
 main(appLogger).catch(error => {

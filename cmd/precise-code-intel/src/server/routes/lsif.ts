@@ -116,7 +116,7 @@ export function createLsifRouter(
                             ctx.span
                         )
 
-                        // Upload the payload file where it can be found by the worker
+                        // Upload the payload file where it can be found by the converter
                         await logAndTraceCall(ctx, 'Uploading payload to bundle manager', () =>
                             pipeline(
                                 fs.createReadStream(filename),

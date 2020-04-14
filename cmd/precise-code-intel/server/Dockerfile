@@ -40,4 +40,4 @@ COPY --from=precise-code-intel-builder /precise-code-intel /precise-code-intel
 
 EXPOSE 3186
 ENV LOG_LEVEL=debug
-ENTRYPOINT ["/sbin/tini", "--", "node", "/precise-code-intel/out/api-server/api.js"]
+ENTRYPOINT ["/sbin/tini", "--", "node", "/precise-code-intel/out/server/server.js"]

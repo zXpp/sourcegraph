@@ -21,10 +21,10 @@ echo "--- go build"
 go build \
     -trimpath \
     -ldflags "-X github.com/sourcegraph/sourcegraph/internal/version.version=$VERSION"  \
-    -o "$OUTPUT/supervisor" github.com/sourcegraph/sourcegraph/cmd/precise-code-intel/worker
+    -o "$OUTPUT/supervisor" github.com/sourcegraph/sourcegraph/cmd/precise-code-intel/converter
 
 echo "--- docker build"
-docker build -f cmd/precise-code-intel/worker/Dockerfile -t "$IMAGE" "$OUTPUT" \
+docker build -f cmd/precise-code-intel/converter/Dockerfile -t "$IMAGE" "$OUTPUT" \
     --progress=plain \
     --build-arg COMMIT_SHA \
     --build-arg DATE \

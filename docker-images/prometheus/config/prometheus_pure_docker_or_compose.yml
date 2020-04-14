@@ -39,4 +39,4 @@ scrape_configs:
 
   static_configs:
     - targets:
-      - precise-code-intel-worker:9090
+      - precise-code-intel-converter:9090

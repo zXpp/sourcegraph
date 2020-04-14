@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	preciseCodeIntelAPIServerURL = env.Get("PRECISE_CODE_INTEL_API_SERVER_URL", "k8s+http://precise-code-intel:3186", "precise-code-intel-api-server URL (or space separated list of precise-code-intel-api-server URLs)")
+	preciseCodeIntelAPIServerURL = env.Get("PRECISE_CODE_INTEL_API_SERVER_URL", "k8s+http://precise-code-intel:3186", "precise-code-intel-server URL (or space separated list of precise-code-intel-server URLs)")
 
 	preciseCodeIntelAPIServerURLsOnce sync.Once
 	preciseCodeIntelAPIServerURLs     *endpoint.Map
@@ -34,7 +34,7 @@ type Client struct {
 func LSIFURLs() *endpoint.Map {
 	preciseCodeIntelAPIServerURLsOnce.Do(func() {
 		if len(strings.Fields(preciseCodeIntelAPIServerURL)) == 0 {
-			preciseCodeIntelAPIServerURLs = endpoint.Empty(errors.New("an precise-code-intel-api-server has not been configured"))
+			preciseCodeIntelAPIServerURLs = endpoint.Empty(errors.New("an precise-code-intel-server has not been configured"))
 		} else {
 			preciseCodeIntelAPIServerURLs = endpoint.New(preciseCodeIntelAPIServerURL)
 		}

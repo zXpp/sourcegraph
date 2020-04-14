@@ -1,9 +1,9 @@
 package main
 
-func PreciseCodeIntelAPIServer() *Container {
+func PreciseCodeIntelServer() *Container {
 	return &Container{
-		Name:        "precise-code-intel-api-server",
-		Title:       "Precise Code Intel API Server",
+		Name:        "precise-code-intel-server",
+		Title:       "Precise Code Intel Server",
 		Description: "Serves precise code intelligence requests.",
 	}
 }

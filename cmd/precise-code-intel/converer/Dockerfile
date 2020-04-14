@@ -48,7 +48,7 @@ USER sourcegraph
 COPY --from=precise-code-intel-builder /precise-code-intel /precise-code-intel
 COPY ./supervisor /usr/local/bin/supervisor
 COPY --from=prometheus /bin/prometheus /bin/prometheus
-COPY ./precise-code-intel/worker/prometheus.yml $PROMETHEUS_CONFIGURATION_DIR/prometheus.yml
+COPY ./precise-code-intel/converter/prometheus.yml $PROMETHEUS_CONFIGURATION_DIR/prometheus.yml
 
 EXPOSE 3188 9090
 ENV GO111MODULES=on LANG=en_US.utf8 LOG_LEVEL=debug
