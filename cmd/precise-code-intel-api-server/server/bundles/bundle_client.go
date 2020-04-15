@@ -79,17 +79,17 @@ func (c *BundleClient) MonikersByPosition(path string, line, character int) (tar
 	return
 }
 
-func (c *BundleClient) MonikerResults(modelType, scheme, identifier string, skip, take *int) (locations []Location, count int, err error) {
+func (c *BundleClient) MonikerResults(modelType, scheme, identifier string, skip, take int) (locations []Location, count int, err error) {
 	args := map[string]interface{}{
 		"modelType":  modelType,
 		"scheme":     scheme,
 		"identifier": identifier,
 	}
-	if skip != nil {
-		args["skip"] = *skip
+	if skip != 0 {
+		args["skip"] = skip
 	}
-	if take != nil {
-		args["take"] = *take
+	if take != 0 {
+		args["take"] = take
 	}
 
 	target := struct {

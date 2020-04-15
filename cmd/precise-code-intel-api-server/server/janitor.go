@@ -34,7 +34,26 @@ func (j *Janitor) Start() {
 	}
 }
 
+// Run performs a best-effort cleanup. See the following methods for more specifics.
+//   - resetStalled
 func (j *Janitor) step() error {
+	cleanupFns := []func() error{
+		j.resetStalled,
+	}
+
+	for _, fn := range cleanupFns {
+		if err := fn(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// resetStalled moves all uploads that have been in the PROCESSING state for a while back
+// to QUEUED. For each updated upload record, the conversion process that was responsible
+// for handling the upload did not hold a row lock, indicating that it has died.
+func (j *Janitor) resetStalled() error {
 	ids, err := j.db.ResetStalled()
 	if err != nil {
 		return err

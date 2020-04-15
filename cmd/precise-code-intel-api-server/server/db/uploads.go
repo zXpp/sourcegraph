@@ -224,6 +224,7 @@ func (db *DB) GetStates(ids []int) (map[int]string, error) {
 	return states, nil
 }
 
+// TODO - find a better pattern for this
 func (db *DB) DeleteUploadByID(id int) (found bool, err error) {
 	err = dbutil.Transaction(context.Background(), db.db, func(tx *sql.Tx) error {
 		query := "DELETE FROM lsif_uploads WHERE id = $1 RETURNING repository_id, visible_at_tip"

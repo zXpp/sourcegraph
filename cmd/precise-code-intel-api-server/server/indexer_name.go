@@ -9,15 +9,22 @@ import (
 	"os"
 )
 
-type MetaDataVertex struct {
+type metaDataVertex struct {
 	Label    string   `json:"label"`
-	ToolInfo ToolInfo `json:"toolInfo"`
+	ToolInfo toolInfo `json:"toolInfo"`
 }
 
-type ToolInfo struct {
+type toolInfo struct {
 	Name string `json:"name"`
 }
 
+var ErrInvalidMetaDataVertex = fmt.Errorf("invalid metadata vertex")
+
+// readIndexerNameFromFile returns the name of the tool that generated
+// the given index file. This function reads only the first line of the
+// file, where the metadata vertex is assumed to be in all valid dumps.
+// This function also resets the offset of the file to the beginning of
+// the file before and after reading.
 func readIndexerNameFromFile(f *os.File) (string, error) {
 	_, err1 := f.Seek(0, 0)
 	name, err2 := readIndexerName(f)
@@ -32,6 +39,9 @@ func readIndexerNameFromFile(f *os.File) (string, error) {
 	return name, nil
 }
 
+// readIndexerName returns the name of the tool that generated the given
+// index contents. This function reads only the first line of the file,
+// where the metadata vertex is assumed to be in all valid dumps.
 func readIndexerName(r io.Reader) (string, error) {
 	gzipReader, err := gzip.NewReader(r)
 	if err != nil {
@@ -43,16 +53,16 @@ func readIndexerName(r io.Reader) (string, error) {
 		return "", err
 	}
 	if isPrefix {
-		return "", fmt.Errorf("metadata vertex exceeds buffer")
+		return "", fmt.Errorf("metaData vertex exceeds buffer")
 	}
 
-	meta := MetaDataVertex{}
+	meta := metaDataVertex{}
 	if err := json.Unmarshal(line, &meta); err != nil {
-		return "", err
+		return "", ErrInvalidMetaDataVertex
 	}
 
 	if meta.Label != "metaData" || meta.ToolInfo.Name == "" {
-		panic("OOPS")
+		return "", ErrInvalidMetaDataVertex
 	}
 
 	return meta.ToolInfo.Name, nil

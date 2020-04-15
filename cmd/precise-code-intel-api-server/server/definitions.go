@@ -47,7 +47,7 @@ func (s *Server) definitionsRaw(dump db.Dump, bundleClient *bundles.BundleClient
 	for _, monikers := range rangeMonikers {
 		for _, moniker := range monikers {
 			if moniker.Kind == "import" {
-				locations, _, err := lookupMoniker(s.db, s.bundleManagerClient, dump.ID, pathInBundle, moniker, "definition", nil, nil)
+				locations, _, err := lookupMoniker(s.db, s.bundleManagerClient, dump.ID, pathInBundle, "definition", moniker, 0, 0)
 				if err != nil {
 					return nil, err
 				}
@@ -59,7 +59,7 @@ func (s *Server) definitionsRaw(dump db.Dump, bundleClient *bundles.BundleClient
 				// table of our own database in case there was a definition that wasn't properly
 				// attached to a result set but did have the correct monikers attached.
 
-				locations, _, err := bundleClient.MonikerResults("definition", moniker.Scheme, moniker.Identifier, nil, nil)
+				locations, _, err := bundleClient.MonikerResults("definition", moniker.Scheme, moniker.Identifier, 0, 0)
 				if err != nil {
 					return nil, err
 				}

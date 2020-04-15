@@ -27,24 +27,24 @@ var testFiles = []string{
 	"128kb.32",
 }
 
-func TestHashKeyUUIDs(t *testing.T) {
+func TestTestTypeScriptGeneratedBloomFilters(t *testing.T) {
 	loremIpsum := readTestWords(t, "lorem-ipsum")
 	corporateIpsum := readTestWords(t, "corporate-ipsum")
 
 	for _, filename := range testFiles {
 		content, err := ioutil.ReadFile(fmt.Sprintf("test-data/filters/%s", filename))
 		if err != nil {
-			t.Fatalf("failed to read test file %s", filename)
+			t.Fatalf("unexpected error reading test file %s", filename)
 		}
 
 		raw, err := hex.DecodeString(strings.TrimSpace(string(content)))
 		if err != nil {
-			t.Fatalf("failed to decode test file %s", filename)
+			t.Fatalf("unexpected error decoding test file %s", filename)
 		}
 
 		buckets, m, k, err := decodeFilter(raw)
 		if err != nil {
-			t.Fatalf("failed to decode filter: %s", err)
+			t.Fatalf("unexpected error decoding filter: %s", err)
 		}
 
 		for _, v := range loremIpsum {
@@ -64,7 +64,7 @@ func TestHashKeyUUIDs(t *testing.T) {
 func readTestWords(t *testing.T, filename string) []string {
 	content, err := ioutil.ReadFile(fmt.Sprintf("test-data/words/%s", filename))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected error reading %s: %s", filename, err)
 	}
 
 	return strings.Split(strings.TrimSpace(string(content)), "\n")

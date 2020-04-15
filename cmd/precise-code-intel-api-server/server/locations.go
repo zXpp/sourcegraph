@@ -18,6 +18,16 @@ type APILocation struct {
 	Range        bundles.Range `json:"range"`
 }
 
+func sliceLocations(locations []bundles.Location, lo, hi int) []bundles.Location {
+	if lo >= len(locations) {
+		return nil
+	}
+	if hi >= len(locations) {
+		hi = len(locations)
+	}
+	return locations[lo:hi]
+}
+
 func resolveLocationsWithDump(dump db.Dump, locations []bundles.Location) []ResolvedLocation {
 	var resolvedLocations []ResolvedLocation
 	for _, location := range locations {
@@ -31,39 +41,6 @@ func resolveLocationsWithDump(dump db.Dump, locations []bundles.Location) []Reso
 	return resolvedLocations
 }
 
-func resolveLocations(db *db.DB, locations []bundles.Location) ([]ResolvedLocation, error) {
-	dumpsByID, err := db.GetDumps(dumpIDs(locations))
-	if err != nil {
-		return nil, err
-	}
-
-	var resolvedLocations []ResolvedLocation
-	for _, location := range locations {
-		dump := dumpsByID[location.DumpID]
-
-		resolvedLocations = append(resolvedLocations, ResolvedLocation{
-			Dump:  dump,
-			Path:  dump.Root + location.Path,
-			Range: location.Range,
-		})
-	}
-
-	return resolvedLocations, nil
-}
-
-func dumpIDs(locations []bundles.Location) []int {
-	uniqueIDs := map[int]struct{}{}
-	for _, l := range locations {
-		uniqueIDs[l.DumpID] = struct{}{}
-	}
-
-	var ids []int
-	for k := range uniqueIDs {
-		ids = append(ids, k)
-	}
-
-	return ids
-}
 func serializeLocations(resolvedLocations []ResolvedLocation) ([]APILocation, error) {
 	var apiLocations []APILocation
 	for _, res := range resolvedLocations {

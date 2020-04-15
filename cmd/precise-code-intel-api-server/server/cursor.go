@@ -45,6 +45,8 @@ func encodeCursor(cursor Cursor) string {
 	return base64.RawURLEncoding.EncodeToString(rawEncoded)
 }
 
+// TODO - test
+// TODO - move?
 func decodeCursorFromRequest(r *http.Request, db *db.DB, bundleManagerClient *bundles.BundleManagerClient) (Cursor, error) {
 	q := r.URL.Query()
 	file := q.Get("path")

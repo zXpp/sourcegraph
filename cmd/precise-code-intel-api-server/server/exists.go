@@ -14,10 +14,7 @@ func (s *Server) findClosestDatabase(repositoryID int, commit, file string) ([]d
 
 	var dumps []db.Dump
 	for _, dump := range candidates {
-		pathInBundle := strings.TrimPrefix(file, dump.Root)
-		bundleClient := s.bundleManagerClient.BundleClient(dump.ID)
-
-		exists, err := bundleClient.Exists(pathInBundle)
+		exists, err := s.bundleManagerClient.BundleClient(dump.ID).Exists(strings.TrimPrefix(file, dump.Root))
 		if err != nil {
 			return nil, err
 		}

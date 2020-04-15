@@ -101,6 +101,7 @@ func makeBloomFilter(a []int) int {
 //     return true
 // }
 
+// TODO - rename
 func test(v string, buckets []int, m, k int) bool {
 	for _, b := range locations(v, m, k) {
 		if (buckets[int(math.Floor(float64(b)/32))] & (1 << (b % 32))) == 0 {
