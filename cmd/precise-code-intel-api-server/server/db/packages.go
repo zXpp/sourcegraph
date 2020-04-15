@@ -26,7 +26,7 @@ func (p *ReferencePager) Next(offset int) ([]Reference, error) {
 	return p.next(offset)
 }
 
-func (db *DB) GetPackage(scheme, name, version string) (Dump, bool, error) {
+func (db *dbImpl) GetPackage(scheme, name, version string) (Dump, bool, error) {
 	query := `
 		SELECT
 			u.id,
@@ -74,7 +74,7 @@ func (db *DB) GetPackage(scheme, name, version string) (Dump, bool, error) {
 	return dump, true, nil
 }
 
-func (db *DB) SameRepoPager(repositoryID int, commit, scheme, name, version string, limit int) (int, *ReferencePager, error) {
+func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version string, limit int) (int, *ReferencePager, error) {
 	tx, err := db.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return 0, nil, err
@@ -151,7 +151,7 @@ func (db *DB) SameRepoPager(repositoryID int, commit, scheme, name, version stri
 	return totalCount, &ReferencePager{tx, next}, nil
 }
 
-func (db *DB) PackageReferencePager(scheme, name, version string, repositoryID, limit int) (int, *ReferencePager, error) {
+func (db *dbImpl) PackageReferencePager(scheme, name, version string, repositoryID, limit int) (int, *ReferencePager, error) {
 	tx, err := db.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return 0, nil, err

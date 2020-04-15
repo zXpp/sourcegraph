@@ -14,7 +14,7 @@ func TestGetDumpByID(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	// Dump does not exist initially
 	if _, exists, err := db.GetDumpByID(1); err != nil {
@@ -115,7 +115,7 @@ func TestDoPrune(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	// Cannot prune empty dump set
 	if _, prunable, err := db.DoPrune(); err != nil {

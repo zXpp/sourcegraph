@@ -47,7 +47,7 @@ func encodeCursor(cursor Cursor) string {
 
 // TODO - test
 // TODO - move?
-func decodeCursorFromRequest(r *http.Request, db *db.DB, bundleManagerClient *bundles.BundleManagerClient) (Cursor, error) {
+func decodeCursorFromRequest(r *http.Request, db db.DB, bundleManagerClient bundles.BundleManagerClient) (Cursor, error) {
 	q := r.URL.Query()
 	file := q.Get("path")
 	line, _ := strconv.Atoi(q.Get("line"))

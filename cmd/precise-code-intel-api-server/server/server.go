@@ -27,15 +27,15 @@ var ErrMissingDump = fmt.Errorf("no dump")
 type Server struct {
 	host                string
 	port                int
-	db                  *db.DB
-	bundleManagerClient *bundles.BundleManagerClient
+	db                  db.DB
+	bundleManagerClient bundles.BundleManagerClient
 }
 
 type ServerOpts struct {
 	Host                string
 	Port                int
-	DB                  *db.DB
-	BundleManagerClient *bundles.BundleManagerClient
+	DB                  db.DB
+	BundleManagerClient bundles.BundleManagerClient
 }
 
 func New(opts ServerOpts) *Server {

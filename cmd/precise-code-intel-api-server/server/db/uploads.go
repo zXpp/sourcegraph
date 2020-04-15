@@ -34,7 +34,7 @@ type Upload struct {
 	// ProcessedAt       time.Time  `json:"processedAt"`
 }
 
-func (db *DB) GetUploadByID(id int) (Upload, bool, error) {
+func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
 	query := `
 		SELECT
 			u.id,
@@ -90,7 +90,7 @@ func (db *DB) GetUploadByID(id int) (Upload, bool, error) {
 	return upload, true, nil
 }
 
-func (db *DB) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) ([]Upload, int, error) {
+func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) ([]Upload, int, error) {
 	conds := []*sqlf.Query{
 		sqlf.Sprintf("u.repository_id = %s", repositoryID),
 	}
@@ -179,7 +179,7 @@ func (db *DB) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTi
 }
 
 // TODO - find a better pattern for this
-func (db *DB) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string, callback func(id int) error) (int, error) {
+func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string, callback func(id int) error) (int, error) {
 	var id int
 	err := dbutil.Transaction(context.Background(), db.db, func(tx *sql.Tx) error {
 		if err := db.db.QueryRowContext(
@@ -196,7 +196,7 @@ func (db *DB) Enqueue(commit, root, tracingContext string, repositoryID int, ind
 	return id, err
 }
 
-func (db *DB) GetStates(ids []int) (map[int]string, error) {
+func (db *dbImpl) GetStates(ids []int) (map[int]string, error) {
 	var qs []*sqlf.Query
 	for _, id := range ids {
 		qs = append(qs, sqlf.Sprintf("%d", id))
@@ -225,7 +225,7 @@ func (db *DB) GetStates(ids []int) (map[int]string, error) {
 }
 
 // TODO - find a better pattern for this
-func (db *DB) DeleteUploadByID(id int) (found bool, err error) {
+func (db *dbImpl) DeleteUploadByID(id int) (found bool, err error) {
 	err = dbutil.Transaction(context.Background(), db.db, func(tx *sql.Tx) error {
 		query := "DELETE FROM lsif_uploads WHERE id = $1 RETURNING repository_id, visible_at_tip"
 
@@ -279,7 +279,7 @@ func (db *DB) DeleteUploadByID(id int) (found bool, err error) {
 	return
 }
 
-func (db *DB) ResetStalled() ([]int, error) {
+func (db *dbImpl) ResetStalled() ([]int, error) {
 	query := `
 		UPDATE lsif_uploads u SET state = 'queued', started_at = null WHERE id = ANY(
 			SELECT id FROM lsif_uploads

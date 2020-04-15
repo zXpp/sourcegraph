@@ -6,8 +6,8 @@ import (
 )
 
 func lookupMoniker(
-	db *db.DB,
-	bundleManagerClient *bundles.BundleManagerClient,
+	db db.DB,
+	bundleManagerClient bundles.BundleManagerClient,
 	dumpID int,
 	path string,
 	model string,

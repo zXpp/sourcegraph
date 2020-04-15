@@ -50,7 +50,7 @@ func main() {
 	waitForSignal()
 }
 
-func mustInitializeDatabase() *db.DB {
+func mustInitializeDatabase() db.DB {
 	postgresDSN := conf.Get().ServiceConnections.PostgresDSN
 	conf.Watch(func() {
 		if newDSN := conf.Get().ServiceConnections.PostgresDSN; postgresDSN != newDSN {

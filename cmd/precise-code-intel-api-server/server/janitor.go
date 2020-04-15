@@ -8,12 +8,12 @@ import (
 )
 
 type Janitor struct {
-	db              *db.DB
+	db              db.DB
 	janitorInterval time.Duration
 }
 
 type JanitorOpts struct {
-	DB              *db.DB
+	DB              db.DB
 	JanitorInterval time.Duration
 }
 

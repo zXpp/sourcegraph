@@ -7,22 +7,29 @@ import (
 	"net/url"
 )
 
-type BundleManagerClient struct {
+type BundleManagerClient interface {
+	BundleClient(bundleID int) BundleClient
+	SendUpload(bundleID int, r io.Reader) error
+}
+
+type bundleManagerClientImpl struct {
 	bundleManagerURL string
 }
 
-func New(bundleManagerURL string) *BundleManagerClient {
-	return &BundleManagerClient{bundleManagerURL: bundleManagerURL}
+var _ BundleManagerClient = &bundleManagerClientImpl{}
+
+func New(bundleManagerURL string) BundleManagerClient {
+	return &bundleManagerClientImpl{bundleManagerURL: bundleManagerURL}
 }
 
-func (c *BundleManagerClient) BundleClient(bundleID int) *BundleClient {
-	return &BundleClient{
+func (c *bundleManagerClientImpl) BundleClient(bundleID int) BundleClient {
+	return &bundleClientImpl{
 		bundleManagerURL: c.bundleManagerURL,
 		bundleID:         bundleID,
 	}
 }
 
-func (c *BundleManagerClient) SendUpload(bundleID int, r io.Reader) error {
+func (c *bundleManagerClientImpl) SendUpload(bundleID int, r io.Reader) error {
 	url, err := url.Parse(fmt.Sprintf("%s/uploads/%d", c.bundleManagerURL, bundleID))
 	if err != nil {
 		return err

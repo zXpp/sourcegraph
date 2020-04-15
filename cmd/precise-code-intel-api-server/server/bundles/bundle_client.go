@@ -7,17 +7,29 @@ import (
 	"net/url"
 )
 
-type BundleClient struct {
+type BundleClient interface {
+	Exists(path string) (exists bool, err error)
+	Definitions(path string, line, character int) (locations []Location, err error)
+	References(path string, line, character int) (locations []Location, err error)
+	Hover(path string, line, character int) (text string, r Range, exists bool, err error)
+	MonikersByPosition(path string, line, character int) (target [][]MonikerData, err error)
+	MonikerResults(modelType, scheme, identifier string, skip, take int) (locations []Location, count int, err error)
+	PackageInformation(path, packageInformationId string) (target PackageInformationData, err error)
+}
+
+type bundleClientImpl struct {
 	bundleManagerURL string
 	bundleID         int
 }
 
-func (c *BundleClient) Exists(path string) (exists bool, err error) {
+var _ BundleClient = &bundleClientImpl{}
+
+func (c *bundleClientImpl) Exists(path string) (exists bool, err error) {
 	err = c.request("exists", map[string]interface{}{"path": path}, &exists)
 	return
 }
 
-func (c *BundleClient) Definitions(path string, line, character int) (locations []Location, err error) {
+func (c *bundleClientImpl) Definitions(path string, line, character int) (locations []Location, err error) {
 	args := map[string]interface{}{
 		"path":      path,
 		"line":      line,
@@ -29,7 +41,7 @@ func (c *BundleClient) Definitions(path string, line, character int) (locations 
 	return
 }
 
-func (c *BundleClient) References(path string, line, character int) (locations []Location, err error) {
+func (c *bundleClientImpl) References(path string, line, character int) (locations []Location, err error) {
 	args := map[string]interface{}{
 		"path":      path,
 		"line":      line,
@@ -41,7 +53,7 @@ func (c *BundleClient) References(path string, line, character int) (locations [
 	return
 }
 
-func (c *BundleClient) Hover(path string, line, character int) (text string, r Range, exists bool, err error) {
+func (c *bundleClientImpl) Hover(path string, line, character int) (text string, r Range, exists bool, err error) {
 	args := map[string]interface{}{
 		"path":      path,
 		"line":      line,
@@ -68,7 +80,7 @@ func (c *BundleClient) Hover(path string, line, character int) (text string, r R
 	return
 }
 
-func (c *BundleClient) MonikersByPosition(path string, line, character int) (target [][]MonikerData, err error) {
+func (c *bundleClientImpl) MonikersByPosition(path string, line, character int) (target [][]MonikerData, err error) {
 	args := map[string]interface{}{
 		"path":      path,
 		"line":      line,
@@ -79,7 +91,7 @@ func (c *BundleClient) MonikersByPosition(path string, line, character int) (tar
 	return
 }
 
-func (c *BundleClient) MonikerResults(modelType, scheme, identifier string, skip, take int) (locations []Location, count int, err error) {
+func (c *bundleClientImpl) MonikerResults(modelType, scheme, identifier string, skip, take int) (locations []Location, count int, err error) {
 	args := map[string]interface{}{
 		"modelType":  modelType,
 		"scheme":     scheme,
@@ -104,7 +116,7 @@ func (c *BundleClient) MonikerResults(modelType, scheme, identifier string, skip
 	return
 }
 
-func (c *BundleClient) PackageInformation(path, packageInformationId string) (target PackageInformationData, err error) {
+func (c *bundleClientImpl) PackageInformation(path, packageInformationId string) (target PackageInformationData, err error) {
 	args := map[string]interface{}{
 		"path":                 path,
 		"packageInformationId": packageInformationId,
@@ -114,7 +126,7 @@ func (c *BundleClient) PackageInformation(path, packageInformationId string) (ta
 	return
 }
 
-func (c *BundleClient) request(path string, qs map[string]interface{}, target interface{}) error {
+func (c *bundleClientImpl) request(path string, qs map[string]interface{}, target interface{}) error {
 	values := url.Values{}
 	for k, v := range qs {
 		values[k] = []string{fmt.Sprintf("%v", v)}
@@ -144,7 +156,7 @@ func (c *BundleClient) request(path string, qs map[string]interface{}, target in
 	return json.NewDecoder(resp.Body).Decode(&target)
 }
 
-func (c *BundleClient) addBundleIDToLocations(locations []Location) {
+func (c *bundleClientImpl) addBundleIDToLocations(locations []Location) {
 	for i := range locations {
 		locations[i].DumpID = c.bundleID
 	}

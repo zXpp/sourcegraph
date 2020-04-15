@@ -20,8 +20,8 @@ func (s *Server) references(repositoryID int, commit string, limit int, cursor C
 }
 
 type ReferencePageResolver struct {
-	db                  *db.DB
-	bundleManagerClient *bundles.BundleManagerClient
+	db                  db.DB
+	bundleManagerClient bundles.BundleManagerClient
 	repositoryID        int
 	commit              string
 	remoteDumpLimit     int

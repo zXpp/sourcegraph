@@ -21,7 +21,7 @@ func (s *Server) definitions(file string, line, character, uploadID int) ([]Reso
 	return s.definitionsRaw(dump, bundleClient, pathInBundle, line, character)
 }
 
-func (s *Server) definitionRaw(dump db.Dump, bundleClient *bundles.BundleClient, pathInBundle string, line, character int) (ResolvedLocation, bool, error) {
+func (s *Server) definitionRaw(dump db.Dump, bundleClient bundles.BundleClient, pathInBundle string, line, character int) (ResolvedLocation, bool, error) {
 	resolved, err := s.definitionsRaw(dump, bundleClient, pathInBundle, line, character)
 	if err != nil || len(resolved) == 0 {
 		return ResolvedLocation{}, false, err
@@ -30,7 +30,7 @@ func (s *Server) definitionRaw(dump db.Dump, bundleClient *bundles.BundleClient,
 	return resolved[0], true, nil
 }
 
-func (s *Server) definitionsRaw(dump db.Dump, bundleClient *bundles.BundleClient, pathInBundle string, line, character int) ([]ResolvedLocation, error) {
+func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient, pathInBundle string, line, character int) ([]ResolvedLocation, error) {
 	locations, err := bundleClient.Definitions(pathInBundle, line, character)
 	if err != nil {
 		return nil, err

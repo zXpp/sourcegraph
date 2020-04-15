@@ -14,7 +14,7 @@ func TestGetPackage(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	// Package does not exist initially
 	if _, exists, err := db.GetPackage("gomod", "leftpad", "0.1.0"); err != nil {
@@ -78,7 +78,7 @@ func TestSameRepoPager(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	dumpsQuery := `
 		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
@@ -147,7 +147,7 @@ func TestSameRepoPagerEmpty(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	totalCount, pager, err := db.SameRepoPager(50, "deadbeef01deadbeef02deadbeef03deadbeef04", "gomod", "leftpad", "0.1.0", 5)
 	if err != nil {
@@ -165,7 +165,7 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	dumpsQuery := `
 		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
@@ -264,7 +264,7 @@ func TestPackageReferencePager(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	dumpsQuery := `
 		INSERT INTO lsif_uploads (id, commit, visible_at_tip, state, tracing_context, repository_id, indexer) VALUES
@@ -322,7 +322,7 @@ func TestPackageReferencePagerEmpty(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	totalCount, pager, err := db.PackageReferencePager("gomod", "leftpad", "0.1.0", 50, 5)
 	if err != nil {
@@ -342,7 +342,7 @@ func TestPackageReferencePagerPages(t *testing.T) {
 		t.Skip()
 	}
 	dbtesting.SetupGlobalTestDB(t)
-	db := &DB{db: dbconn.Global}
+	db := &dbImpl{db: dbconn.Global}
 
 	dumpsQuery := `
 		INSERT INTO lsif_uploads (id, commit, visible_at_tip, state, tracing_context, repository_id, indexer) VALUES

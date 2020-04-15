@@ -26,7 +26,7 @@ type Dump struct {
 	// ProcessedAt       time.Time  `json:"processedAt"`
 }
 
-func (db *DB) GetDumpByID(id int) (Dump, bool, error) {
+func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 	query := sqlf.Sprintf(`
 		SELECT
 			u.id,
@@ -126,7 +126,7 @@ func (db *DB) GetDumpByID(id int) (Dump, bool, error) {
 // 	return dumpsByID, nil
 // }
 
-func (db *DB) FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error) {
+func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error) {
 	query := "WITH " + bidirectionalLineage + ", " + visibleDumps + `
 		SELECT d.dump_id FROM lineage_with_dumps d
 		WHERE $3 LIKE (d.root || '%') AND d.dump_id IN (SELECT * FROM visible_ids)
@@ -200,7 +200,7 @@ func (db *DB) FindClosestDumps(repositoryID int, commit, file string) ([]Dump, e
 }
 
 // TODO - rename
-func (db *DB) DoPrune() (int, bool, error) {
+func (db *dbImpl) DoPrune() (int, bool, error) {
 	// TODO - should only be completed
 	query := "DELETE FROM lsif_uploads WHERE ctid IN (SELECT ctid FROM lsif_uploads WHERE visible_at_tip = false ORDER BY uploaded_at LIMIT 1) RETURNING id"
 
