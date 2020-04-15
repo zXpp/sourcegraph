@@ -128,9 +128,7 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 		) s
 		ON u.id = s.id
 		WHERE %s
-		ORDER BY uploaded_at DESC
-		LIMIT %d
-		OFFSET %d
+		ORDER BY uploaded_at DESC LIMIT %d OFFSET %d
 	`, sqlf.Join(conds, " AND "), limit, offset)
 
 	rows, err := db.db.QueryContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...)
@@ -164,6 +162,7 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 		uploads = append(uploads, upload)
 	}
 
+	// TODO - do this transactionally
 	var count int
 	countQuery := sqlf.Sprintf("SELECT COUNT(1) FROM lsif_uploads u WHERE %s", sqlf.Join(conds, " AND "))
 	if err := db.db.QueryRowContext(context.Background(), countQuery.Query(sqlf.PostgresBindVar), countQuery.Args()...).Scan(&count); err != nil {

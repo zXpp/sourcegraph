@@ -217,22 +217,6 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 		t.Errorf("unexpected dump. want=%v have=%v", 9, totalCount)
 	}
 
-	testCases := []struct {
-		offset int
-		lo     int
-		hi     int
-	}{
-		{0, 0, 3},
-		{1, 1, 4},
-		{2, 2, 5},
-		{3, 3, 6},
-		{4, 4, 7},
-		{5, 5, 8},
-		{6, 6, 9},
-		{7, 7, 9},
-		{8, 8, 9},
-	}
-
 	expected := []Reference{
 		{DumpID: 1, Filter: "f1"},
 		{DumpID: 2, Filter: "f2"},
@@ -245,15 +229,21 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 		{DumpID: 9, Filter: "f9"},
 	}
 
-	for _, testCase := range testCases {
-		references, err := pager.PageFromOffset(testCase.offset)
-		if err != nil {
-			t.Fatalf("unexpected error getting page at offset %d: %s", testCase.offset, err)
+	for lo := 0; lo < len(expected); lo++ {
+		hi := lo + 3
+		if hi > len(expected) {
+			hi = len(expected)
 		}
 
-		if !reflect.DeepEqual(references, expected[testCase.lo:testCase.hi]) {
-			t.Errorf("unexpected references at offset %d. want=%v have=%v", testCase.offset, expected[testCase.lo:testCase.hi], references)
+		references, err := pager.PageFromOffset(lo)
+		if err != nil {
+			t.Fatalf("unexpected error getting page at offset %d: %s", lo, err)
 		}
+
+		if !reflect.DeepEqual(references, expected[lo:hi]) {
+			t.Errorf("unexpected references at offset %d. want=%v have=%v", lo, expected[lo:hi], references)
+		}
+
 	}
 }
 
