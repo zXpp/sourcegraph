@@ -1,16 +1,11 @@
 package db
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"time"
 
 	"github.com/keegancsmith/sqlf"
-	sgdb "github.com/sourcegraph/sourcegraph/cmd/frontend/db"
-	"github.com/sourcegraph/sourcegraph/internal/api"
-	"github.com/sourcegraph/sourcegraph/internal/db/dbutil"
-	"github.com/sourcegraph/sourcegraph/internal/gitserver"
 )
 
 const StalledUploadMaxAge = time.Second * 5
@@ -178,22 +173,22 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 	return uploads, count, nil
 }
 
-// TODO - find a better pattern for this
-func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string, callback func(id int) error) (int, error) {
+func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string) (int, TxCloser, error) {
+	tx, err := db.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	var id int
-	err := dbutil.Transaction(context.Background(), db.db, func(tx *sql.Tx) error {
-		if err := db.db.QueryRowContext(
-			context.Background(),
-			`INSERT INTO lsif_uploads (commit, root, tracing_context, repository_id, indexer) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-			commit, root, tracingContext, repositoryID, indexerName,
-		).Scan(&id); err != nil {
-			return err
-		}
+	if err := tx.QueryRowContext(
+		context.Background(),
+		`INSERT INTO lsif_uploads (commit, root, tracing_context, repository_id, indexer) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		commit, root, tracingContext, repositoryID, indexerName,
+	).Scan(&id); err != nil {
+		return 0, nil, closeTx(tx, err)
+	}
 
-		return callback(id)
-	})
-
-	return id, err
+	return id, &txCloser{tx}, nil
 }
 
 func (db *dbImpl) GetStates(ids []int) (map[int]string, error) {
@@ -224,58 +219,55 @@ func (db *dbImpl) GetStates(ids []int) (map[int]string, error) {
 	return states, nil
 }
 
-// TODO - find a better pattern for this
-func (db *dbImpl) DeleteUploadByID(id int) (found bool, err error) {
-	err = dbutil.Transaction(context.Background(), db.db, func(tx *sql.Tx) error {
-		query := "DELETE FROM lsif_uploads WHERE id = $1 RETURNING repository_id, visible_at_tip"
+func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (string, error)) (found bool, err error) {
+	tx, err := db.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		err = closeTx(tx, err)
+	}()
 
-		var repositoryID int
-		var visibleAtTip bool
-		if err := tx.QueryRowContext(context.Background(), query, id).Scan(&repositoryID, &visibleAtTip); err != nil {
-			if err == sql.ErrNoRows {
-				found = false
-				return nil
-			}
+	query := "DELETE FROM lsif_uploads WHERE id = $1 RETURNING repository_id, visible_at_tip"
 
-			return err
+	var repositoryID int
+	var visibleAtTip bool
+	if err = tx.QueryRowContext(context.Background(), query, id).Scan(&repositoryID, &visibleAtTip); err != nil {
+		if err == sql.ErrNoRows {
+			err = nil
 		}
 
-		found = true
-		if visibleAtTip {
-			// TODO - do we need this dependency?
-			repo, err := sgdb.Repos.Get(context.Background(), api.RepoID(repositoryID))
-			if err != nil {
-				return err
-			}
+		return
+	}
 
-			cmd := gitserver.DefaultClient.Command("git", "rev-parse", "HEAD")
-			cmd.Repo = gitserver.Repo{Name: repo.Name}
-			out, err := cmd.CombinedOutput(context.Background())
-			if err != nil {
-				return err
-			}
-			tipCommit := string(bytes.TrimSpace(out))
+	found = true
+	if !visibleAtTip {
+		return
+	}
 
-			// TODO - do we need to discover commits here? The old
-			// implementation does it but my gut says no now that
-			// I think about it a bit more.
+	var tipCommit string
+	tipCommit, err = getTipCommit(repositoryID)
+	if err != nil {
+		return
+	}
 
-			query2 := "WITH " + ancestorLineage + ", " + visibleDumps + `
-				-- Update dump records by:
-				--   (1) unsetting the visibility flag of all previously visible dumps, and
-				--   (2) setting the visibility flag of all currently visible dumps
-				UPDATE lsif_dumps d
-				SET visible_at_tip = id IN (SELECT * from visible_ids)
-				WHERE d.repository_id = $1 AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
-			`
+	// TODO - do we need to discover commits here? The old
+	// implementation does it but my gut says no now that
+	// I think about it a bit more.
 
-			if _, err := tx.ExecContext(context.Background(), query2, repositoryID, tipCommit); err != nil {
-				return err
-			}
-		}
+	query2 := "WITH " + ancestorLineage + ", " + visibleDumps + `
+			-- Update dump records by:
+			--   (1) unsetting the visibility flag of all previously visible dumps, and
+			--   (2) setting the visibility flag of all currently visible dumps
+			UPDATE lsif_dumps d
+			SET visible_at_tip = id IN (SELECT * from visible_ids)
+			WHERE d.repository_id = $1 AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
+		`
 
-		return nil
-	})
+	if _, err = tx.ExecContext(context.Background(), query2, repositoryID, tipCommit); err != nil {
+		return
+	}
+
 	return
 }
 

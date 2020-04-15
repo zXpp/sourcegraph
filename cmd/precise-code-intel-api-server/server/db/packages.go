@@ -12,20 +12,6 @@ type Reference struct {
 	Filter string
 }
 
-type ReferencePager struct {
-	tx   *sql.Tx
-	next func(offset int) ([]Reference, error)
-}
-
-func (p *ReferencePager) Close() error {
-	return p.tx.Commit() // TODO - always commit?
-}
-
-// TODO - rename
-func (p *ReferencePager) Next(offset int) ([]Reference, error) {
-	return p.next(offset)
-}
-
 func (db *dbImpl) GetPackage(scheme, name, version string) (Dump, bool, error) {
 	query := `
 		SELECT
@@ -82,8 +68,7 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 
 	rows, err := tx.QueryContext(context.Background(), "WITH "+bidirectionalLineage+", "+visibleDumps+"SELECT id FROM visible_ids", repositoryID, commit)
 	if err != nil {
-		_ = tx.Rollback()
-		return 0, nil, err
+		return 0, nil, closeTx(tx, err)
 	}
 	defer rows.Close()
 
@@ -91,15 +76,14 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 	for rows.Next() {
 		var id int
 		if err := rows.Scan(&id); err != nil {
-			_ = tx.Rollback()
-			return 0, nil, err
+			return 0, nil, closeTx(tx, err)
 		}
 
 		visibleIDs = append(visibleIDs, id)
 	}
 
 	if len(visibleIDs) == 0 {
-		return 0, &ReferencePager{tx: tx, next: func(offset int) ([]Reference, error) { return nil, nil }}, nil
+		return 0, newEmptyReferencePager(tx), nil
 	}
 
 	var qs []*sqlf.Query
@@ -114,11 +98,10 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 
 	var totalCount int
 	if err := tx.QueryRowContext(context.Background(), cq.Query(sqlf.PostgresBindVar), cq.Args()...).Scan(&totalCount); err != nil {
-		_ = tx.Rollback()
-		return 0, nil, err
+		return 0, nil, closeTx(tx, err)
 	}
 
-	next := func(offset int) ([]Reference, error) {
+	pageFromOffset := func(offset int) ([]Reference, error) {
 		queryx := sqlf.Sprintf(`
 			SELECT d.id, r.filter FROM lsif_references r
 			LEFT JOIN lsif_dumps d on r.dump_id = d.id
@@ -148,7 +131,7 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 
 	}
 
-	return totalCount, &ReferencePager{tx, next}, nil
+	return totalCount, newReferencePager(tx, pageFromOffset), nil
 }
 
 func (db *dbImpl) PackageReferencePager(scheme, name, version string, repositoryID, limit int) (int, *ReferencePager, error) {
@@ -165,11 +148,10 @@ func (db *dbImpl) PackageReferencePager(scheme, name, version string, repository
 
 	var totalCount int
 	if err := tx.QueryRowContext(context.Background(), query, scheme, name, version, repositoryID).Scan(&totalCount); err != nil {
-		_ = tx.Rollback()
-		return 0, nil, err
+		return 0, nil, closeTx(tx, err)
 	}
 
-	next := func(offset int) ([]Reference, error) {
+	pageFromOffset := func(offset int) ([]Reference, error) {
 		queryx := `
 			SELECT d.id, r.filter FROM lsif_references r
 			LEFT JOIN lsif_dumps d ON r.dump_id = d.id
@@ -198,5 +180,5 @@ func (db *dbImpl) PackageReferencePager(scheme, name, version string, repository
 		return refs, nil
 	}
 
-	return totalCount, &ReferencePager{tx, next}, nil
+	return totalCount, newReferencePager(tx, pageFromOffset), nil
 }

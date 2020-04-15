@@ -10,7 +10,7 @@ func lookupMoniker(
 	bundleManagerClient bundles.BundleManagerClient,
 	dumpID int,
 	path string,
-	model string,
+	modelType string,
 	moniker bundles.MonikerData,
 	skip int,
 	take int,
@@ -29,7 +29,7 @@ func lookupMoniker(
 		return nil, 0, err
 	}
 
-	locations, count, err := bundleManagerClient.BundleClient(dump.ID).MonikerResults(model, moniker.Scheme, moniker.Identifier, skip, take)
+	locations, count, err := bundleManagerClient.BundleClient(dump.ID).MonikerResults(modelType, moniker.Scheme, moniker.Identifier, skip, take)
 	if err != nil {
 		return nil, 0, err
 	}

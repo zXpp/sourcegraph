@@ -8,13 +8,13 @@ import (
 )
 
 type BundleClient interface {
-	Exists(path string) (exists bool, err error)
-	Definitions(path string, line, character int) (locations []Location, err error)
-	References(path string, line, character int) (locations []Location, err error)
-	Hover(path string, line, character int) (text string, r Range, exists bool, err error)
-	MonikersByPosition(path string, line, character int) (target [][]MonikerData, err error)
-	MonikerResults(modelType, scheme, identifier string, skip, take int) (locations []Location, count int, err error)
-	PackageInformation(path, packageInformationId string) (target PackageInformationData, err error)
+	Exists(path string) (bool, error)
+	Definitions(path string, line, character int) ([]Location, error)
+	References(path string, line, character int) ([]Location, error)
+	Hover(path string, line, character int) (string, Range, bool, error)
+	MonikersByPosition(path string, line, character int) ([][]MonikerData, error)
+	MonikerResults(modelType, scheme, identifier string, skip, take int) ([]Location, int, error)
+	PackageInformation(path, packageInformationID string) (PackageInformationData, error)
 }
 
 type bundleClientImpl struct {
@@ -116,10 +116,10 @@ func (c *bundleClientImpl) MonikerResults(modelType, scheme, identifier string, 
 	return
 }
 
-func (c *bundleClientImpl) PackageInformation(path, packageInformationId string) (target PackageInformationData, err error) {
+func (c *bundleClientImpl) PackageInformation(path, packageInformationID string) (target PackageInformationData, err error) {
 	args := map[string]interface{}{
 		"path":                 path,
-		"packageInformationId": packageInformationId,
+		"packageInformationId": packageInformationID,
 	}
 
 	err = c.request("packageInformation", args, &target)

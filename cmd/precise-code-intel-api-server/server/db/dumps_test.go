@@ -69,47 +69,6 @@ func TestFindClosestDumps(t *testing.T) {
 	// TODO - need to test LOTS of conditions here
 }
 
-// func TestGetDumps(t *testing.T) {
-// 	if testing.Short() {
-// 		t.Skip()
-// 	}
-// 	dbtesting.SetupGlobalTestDB(t)
-// 	db := &DB{db: dbconn.Global}
-
-// 	query := `
-// 		INSERT INTO lsif_uploads (id, commit, state, tracing_context, repository_id, indexer) VALUES
-// 		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'completed', '', 50, 'lsif-go'),
-// 		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', 'completed', '', 50, 'lsif-go'),
-// 		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', 'completed', '', 50, 'lsif-go'),
-// 		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', 'completed', '', 50, 'lsif-go')
-// 	`
-// 	if _, err := db.db.Query(query); err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	dumps, err := db.GetDumps([]int{1, 2, 4, 6})
-// 	if err != nil {
-// 		t.Fatalf("unexpected error getting dump: %s", err)
-// 	}
-
-// 	commits := map[int]string{}
-// 	for id, dump := range dumps {
-// 		if id != dump.ID {
-// 			t.Errorf("unexpected dump id. want=%v have=%v", dump.ID, id)
-// 		}
-// 		commits[dump.ID] = dump.Commit
-// 	}
-
-// 	expected := map[int]string{
-// 		1: "deadbeef11deadbeef12deadbeef13deadbeef14",
-// 		2: "deadbeef21deadbeef22deadbeef23deadbeef24",
-// 		4: "deadbeef41deadbeef42deadbeef43deadbeef44",
-// 	}
-// 	if !reflect.DeepEqual(commits, expected) {
-// 		t.Errorf("unexpected dump commits. want=%v have=%v", expected, commits)
-// 	}
-// }
-
 func TestDoPrune(t *testing.T) {
 	if testing.Short() {
 		t.Skip()

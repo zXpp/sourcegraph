@@ -222,7 +222,6 @@ func (s *ReferencePageResolver) fooborp(cursor Cursor, q func() (int, *db.Refere
 		if err != nil {
 			return nil, Cursor{}, false, err
 		}
-		// TODO - defer close pager
 
 		var refs []db.Reference
 		identifier := cursor.Identifier
@@ -231,9 +230,9 @@ func (s *ReferencePageResolver) fooborp(cursor Cursor, q func() (int, *db.Refere
 		newOffset := offset
 
 		for len(refs) < limit && newOffset < totalCount {
-			page, err := pager.Next(newOffset)
+			page, err := pager.PageFromOffset(newOffset)
 			if err != nil {
-				return nil, Cursor{}, false, err
+				return nil, Cursor{}, false, pager.CloseTx(err)
 			}
 
 			if len(page) == 0 {
@@ -257,6 +256,10 @@ func (s *ReferencePageResolver) fooborp(cursor Cursor, q func() (int, *db.Refere
 		cursor.DumpIDs = dumpIDs
 		cursor.SkipDumpsWhenBatching = newOffset
 		cursor.TotalDumpsWhenBatching = totalCount
+
+		if err := pager.CloseTx(nil); err != nil {
+			return nil, Cursor{}, false, err
+		}
 	}
 
 	for i, batchDumpID := range cursor.DumpIDs {

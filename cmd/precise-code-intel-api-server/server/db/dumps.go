@@ -70,62 +70,6 @@ func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 	return dump, true, nil
 }
 
-// func (db *DB) GetDumps(ids []int) (map[int]Dump, error) {
-// 	var qs []*sqlf.Query
-// 	for _, id := range ids {
-// 		qs = append(qs, sqlf.Sprintf("%d", id))
-// 	}
-
-// 	// TODO - completed condition?
-// 	query2 := sqlf.Sprintf(`SELECT
-// 		u.id,
-// 		u.commit,
-// 		u.root,
-// 		u.visible_at_tip,
-// 		u.uploaded_at,
-// 		u.state,
-// 		u.failure_summary,
-// 		u.failure_stacktrace,
-// 		u.started_at,
-// 		u.finished_at,
-// 		u.tracing_context,
-// 		u.repository_id,
-// 		u.indexer
-// 	FROM lsif_uploads u WHERE id IN (%s)`, sqlf.Join(qs, ", "))
-
-// 	rows2, err := db.db.QueryContext(context.Background(), query2.Query(sqlf.PostgresBindVar), query2.Args()...)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer rows2.Close()
-
-// 	dumpsByID := map[int]Dump{}
-// 	for rows2.Next() {
-// 		dump := Dump{}
-// 		if err := rows2.Scan(
-// 			&dump.ID,
-// 			&dump.Commit,
-// 			&dump.Root,
-// 			&dump.VisibleAtTip,
-// 			&dump.UploadedAt,
-// 			&dump.State,
-// 			&dump.FailureSummary,
-// 			&dump.FailureStacktrace,
-// 			&dump.StartedAt,
-// 			&dump.FinishedAt,
-// 			&dump.TracingContext,
-// 			&dump.RepositoryID,
-// 			&dump.Indexer,
-// 		); err != nil {
-// 			return nil, err
-// 		}
-
-// 		dumpsByID[dump.ID] = dump
-// 	}
-
-// 	return dumpsByID, nil
-// }
-
 func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error) {
 	query := "WITH " + bidirectionalLineage + ", " + visibleDumps + `
 		SELECT d.dump_id FROM lineage_with_dumps d

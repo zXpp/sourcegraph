@@ -6,6 +6,7 @@ import (
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 )
 
+// TODO - rename
 func (s *Server) findClosestDatabase(repositoryID int, commit, file string) ([]db.Dump, error) {
 	candidates, err := s.db.FindClosestDumps(repositoryID, commit, file)
 	if err != nil {

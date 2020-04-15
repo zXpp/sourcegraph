@@ -21,15 +21,6 @@ func (s *Server) definitions(file string, line, character, uploadID int) ([]Reso
 	return s.definitionsRaw(dump, bundleClient, pathInBundle, line, character)
 }
 
-func (s *Server) definitionRaw(dump db.Dump, bundleClient bundles.BundleClient, pathInBundle string, line, character int) (ResolvedLocation, bool, error) {
-	resolved, err := s.definitionsRaw(dump, bundleClient, pathInBundle, line, character)
-	if err != nil || len(resolved) == 0 {
-		return ResolvedLocation{}, false, err
-	}
-
-	return resolved[0], true, nil
-}
-
 func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient, pathInBundle string, line, character int) ([]ResolvedLocation, error) {
 	locations, err := bundleClient.Definitions(pathInBundle, line, character)
 	if err != nil {
@@ -47,7 +38,7 @@ func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient,
 	for _, monikers := range rangeMonikers {
 		for _, moniker := range monikers {
 			if moniker.Kind == "import" {
-				locations, _, err := lookupMoniker(s.db, s.bundleManagerClient, dump.ID, pathInBundle, "definition", moniker, 0, 0)
+				locations, _, err := lookupMoniker(s.db, s.bundleManagerClient, dump.ID, pathInBundle, "definitions", moniker, 0, 0)
 				if err != nil {
 					return nil, err
 				}
@@ -59,7 +50,7 @@ func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient,
 				// table of our own database in case there was a definition that wasn't properly
 				// attached to a result set but did have the correct monikers attached.
 
-				locations, _, err := bundleClient.MonikerResults("definition", moniker.Scheme, moniker.Identifier, 0, 0)
+				locations, _, err := bundleClient.MonikerResults("definitions", moniker.Scheme, moniker.Identifier, 0, 0)
 				if err != nil {
 					return nil, err
 				}
@@ -71,4 +62,13 @@ func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient,
 	}
 
 	return nil, nil
+}
+
+func (s *Server) definitionRaw(dump db.Dump, bundleClient bundles.BundleClient, pathInBundle string, line, character int) (ResolvedLocation, bool, error) {
+	resolved, err := s.definitionsRaw(dump, bundleClient, pathInBundle, line, character)
+	if err != nil || len(resolved) == 0 {
+		return ResolvedLocation{}, false, err
+	}
+
+	return resolved[0], true, nil
 }

@@ -32,7 +32,7 @@ func (s *Server) hover(file string, line, character, uploadID int) (string, bund
 	}
 
 	pathInDefinitionBundle := strings.TrimPrefix(definition.Path, definition.Dump.Root)
-	DefinitionbundleClient := s.bundleManagerClient.BundleClient(definition.Dump.ID)
+	definitionBundleClient := s.bundleManagerClient.BundleClient(definition.Dump.ID)
 
-	return DefinitionbundleClient.Hover(pathInDefinitionBundle, definition.Range.Start.Line, definition.Range.Start.Character)
+	return definitionBundleClient.Hover(pathInDefinitionBundle, definition.Range.Start.Line, definition.Range.Start.Character)
 }

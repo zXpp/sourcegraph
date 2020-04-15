@@ -9,9 +9,9 @@ import (
 type DB interface {
 	GetUploadByID(id int) (Upload, bool, error)
 	GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) ([]Upload, int, error)
-	Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string, callback func(id int) error) (int, error)
+	Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string) (int, TxCloser, error)
 	GetStates(ids []int) (map[int]string, error)
-	DeleteUploadByID(id int) (found bool, err error)
+	DeleteUploadByID(id int, getTipCommit func(repositoryID int) (string, error)) (bool, error)
 	ResetStalled() ([]int, error)
 
 	GetDumpByID(id int) (Dump, bool, error)

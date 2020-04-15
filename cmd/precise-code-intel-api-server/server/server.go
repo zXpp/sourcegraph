@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,8 +15,11 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/inconshreveable/log15"
+	sgdb "github.com/sourcegraph/sourcegraph/cmd/frontend/db"
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
+	"github.com/sourcegraph/sourcegraph/internal/api"
+	"github.com/sourcegraph/sourcegraph/internal/gitserver"
 	"github.com/sourcegraph/sourcegraph/internal/trace/ot"
 	"github.com/tomnomnom/linkheader"
 )
@@ -101,7 +105,22 @@ func (s *Server) handleGetUploadByID(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /uploads/{id:[0-9]+}
 func (s *Server) handleDeleteUploadByID(w http.ResponseWriter, r *http.Request) {
-	exists, err := s.db.DeleteUploadByID(int(idFromRequest(r)))
+	exists, err := s.db.DeleteUploadByID(int(idFromRequest(r)), func(repositoryID int) (string, error) {
+		// TODO - move this
+		// TODO - don't have this dependency on repo
+		repo, err := sgdb.Repos.Get(context.Background(), api.RepoID(repositoryID))
+		if err != nil {
+			return "", err
+		}
+
+		cmd := gitserver.DefaultClient.Command("git", "rev-parse", "HEAD")
+		cmd.Repo = gitserver.Repo{Name: repo.Name}
+		out, err := cmd.CombinedOutput(context.Background())
+		if err != nil {
+			return "", err
+		}
+		return string(bytes.TrimSpace(out)), nil
+	})
 	if err != nil {
 		log15.Error("Failed to delete upload", "error", err)
 		http.Error(w, fmt.Sprintf("failed to delete upload: %s", err.Error()), http.StatusInternalServerError)
@@ -185,9 +204,10 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	id, err := s.db.Enqueue(commit, root, tracingContext, repositoryID, indexerName, func(id int) error {
-		return s.bundleManagerClient.SendUpload(id, f)
-	})
+	id, closer, err := s.db.Enqueue(commit, root, tracingContext, repositoryID, indexerName)
+	if err == nil {
+		err = closer.CloseTx(s.bundleManagerClient.SendUpload(id, f))
+	}
 	if err != nil {
 		log15.Error("Failed to enqueue payload", "error", err)
 		http.Error(w, fmt.Sprintf("failed to enqueue payload: %s", err.Error()), http.StatusInternalServerError)

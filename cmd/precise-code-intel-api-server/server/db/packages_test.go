@@ -119,13 +119,13 @@ func TestSameRepoPager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.Close()
+	defer pager.CloseTx(nil)
 
 	if totalCount != 5 {
 		t.Errorf("unexpected dump. want=%v have=%v", 5, totalCount)
 	}
 
-	references, err := pager.Next(0)
+	references, err := pager.PageFromOffset(0)
 	if err != nil {
 		t.Fatalf("unexpected error getting next page: %s", err)
 	}
@@ -153,7 +153,7 @@ func TestSameRepoPagerEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.Close()
+	defer pager.CloseTx(nil)
 
 	if totalCount != 0 {
 		t.Errorf("unexpected dump. want=%v have=%v", 0, totalCount)
@@ -211,7 +211,7 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.Close()
+	defer pager.CloseTx(nil)
 
 	if totalCount != 9 {
 		t.Errorf("unexpected dump. want=%v have=%v", 9, totalCount)
@@ -246,7 +246,7 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		references, err := pager.Next(testCase.offset)
+		references, err := pager.PageFromOffset(testCase.offset)
 		if err != nil {
 			t.Fatalf("unexpected error getting page at offset %d: %s", testCase.offset, err)
 		}
@@ -268,11 +268,12 @@ func TestPackageReferencePager(t *testing.T) {
 
 	dumpsQuery := `
 		INSERT INTO lsif_uploads (id, commit, visible_at_tip, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', true, 'completed', '', 51, 'lsif-go'),
-		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', true, 'completed', '', 52, 'lsif-go'),
-		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', true, 'completed', '', 53, 'lsif-go'),
-		(4, 'deadbeef21deadbeef22deadbeef23deadbeef24', true, 'completed', '', 54, 'lsif-go'),
-		(5, 'deadbeef11deadbeef12deadbeef13deadbeef14', true, 'completed', '', 55, 'lsif-go')
+		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', true, 'completed', '', 50, 'lsif-go'),
+		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', true, 'completed', '', 51, 'lsif-go'),
+		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', true, 'completed', '', 52, 'lsif-go'),
+		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', true, 'completed', '', 53, 'lsif-go'),
+		(5, 'deadbeef51deadbeef52deadbeef53deadbeef54', true, 'completed', '', 54, 'lsif-go'),
+		(6, 'deadbeef61deadbeef62deadbeef63deadbeef64', true, 'completed', '', 55, 'lsif-go')
 	`
 	if _, err := db.db.Exec(dumpsQuery); err != nil {
 		t.Fatal(err)
@@ -284,7 +285,8 @@ func TestPackageReferencePager(t *testing.T) {
 		('gomod', 'leftpad', '0.1.0', 2, 'f2'),
 		('gomod', 'leftpad', '0.1.0', 3, 'f3'),
 		('gomod', 'leftpad', '0.1.0', 4, 'f4'),
-		('gomod', 'leftpad', '0.1.0', 5, 'f5')
+		('gomod', 'leftpad', '0.1.0', 5, 'f5'),
+		('gomod', 'leftpad', '0.1.0', 6, 'f6')
 	`
 	if _, err := db.db.Exec(referenceQuery); err != nil {
 		t.Fatal(err)
@@ -294,23 +296,23 @@ func TestPackageReferencePager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.Close()
+	defer pager.CloseTx(nil)
 
 	if totalCount != 5 {
 		t.Errorf("unexpected dump. want=%v have=%v", 5, totalCount)
 	}
 
-	references, err := pager.Next(0)
+	references, err := pager.PageFromOffset(0)
 	if err != nil {
 		t.Fatalf("unexpected error getting next page: %s", err)
 	}
 
 	expected := []Reference{
-		{DumpID: 1, Filter: "f1"},
 		{DumpID: 2, Filter: "f2"},
 		{DumpID: 3, Filter: "f3"},
 		{DumpID: 4, Filter: "f4"},
 		{DumpID: 5, Filter: "f5"},
+		{DumpID: 6, Filter: "f6"},
 	}
 	if !reflect.DeepEqual(references, expected) {
 		t.Errorf("unexpected references. want=%v have=%v", expected, references)
@@ -328,14 +330,12 @@ func TestPackageReferencePagerEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.Close()
+	defer pager.CloseTx(nil)
 
 	if totalCount != 0 {
 		t.Errorf("unexpected dump. want=%v have=%v", 0, totalCount)
 	}
 }
-
-// TODO - skips repo
 
 func TestPackageReferencePagerPages(t *testing.T) {
 	if testing.Short() {
@@ -380,7 +380,7 @@ func TestPackageReferencePagerPages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.Close()
+	defer pager.CloseTx(nil)
 
 	if totalCount != 9 {
 		t.Errorf("unexpected dump. want=%v have=%v", 9, totalCount)
@@ -415,7 +415,7 @@ func TestPackageReferencePagerPages(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		references, err := pager.Next(testCase.offset)
+		references, err := pager.PageFromOffset(testCase.offset)
 		if err != nil {
 			t.Fatalf("unexpected error getting page at offset %d: %s", testCase.offset, err)
 		}
