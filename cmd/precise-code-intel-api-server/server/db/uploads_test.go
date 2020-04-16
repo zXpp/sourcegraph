@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/keegancsmith/sqlf"
 	"github.com/sourcegraph/sourcegraph/internal/db/dbconn"
 	"github.com/sourcegraph/sourcegraph/internal/db/dbtesting"
 )
@@ -445,6 +446,303 @@ func TestDeleteUploadByIDUpdatesVisibility(t *testing.T) {
 	}
 
 	expected := map[int]bool{2: true, 3: true, 4: false}
+	if !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
+}
+
+func TestUpdateDumpsVisibleFromTipOverlappingRoots(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	// This database has the following commit graph:
+	//
+	// a -- b -- c -- d -- e -- f -- g
+
+	uploadsQuery := `
+		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
+		(1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'r1/', 'completed', '', 50, 'lsif-go'),
+		(2, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'r2/', 'completed', '', 50, 'lsif-go'),
+		(3, 'cccccccccccccccccccccccccccccccccccccccc', '', 'completed', '', 50, 'lsif-go'),
+		(4, 'dddddddddddddddddddddddddddddddddddddddd', 'r3/', 'completed', '', 50, 'lsif-go'),
+		(5, 'ffffffffffffffffffffffffffffffffffffffff', 'r4/', 'completed', '', 50, 'lsif-go'),
+		(6, 'gggggggggggggggggggggggggggggggggggggggg', 'r5/', 'completed', '', 50, 'lsif-go')
+	`
+	if _, err := db.db.Query(uploadsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	commitsQuery := `
+		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
+		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
+		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
+		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'cccccccccccccccccccccccccccccccccccccccc'),
+		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
+		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
+		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'ffffffffffffffffffffffffffffffffffffffff')
+	`
+	if _, err := db.db.Query(commitsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	err := db.updateDumpsVisibleFromTip(nil, 50, "ffffffffffffffffffffffffffffffffffffffff")
+	if err != nil {
+		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
+	}
+
+	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	visibility := map[int]bool{}
+	for rows.Next() {
+		var id int
+		var visibleAtTip bool
+		if err := rows.Scan(&id, &visibleAtTip); err != nil {
+			t.Fatal(err)
+		}
+
+		visibility[id] = visibleAtTip
+	}
+
+	expected := map[int]bool{1: false, 2: false, 3: false, 4: true, 5: true, 6: false}
+	if !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
+}
+
+func TestUpdateDumpsVisibleFromTipOverlappingRootsSameIndexer(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	// This database has the following commit graph:
+	//
+	// a -- b --
+
+	uploadsQuery := `
+		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
+		(1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'r1/', 'completed', '', 50, 'lsif-go'),
+		(2, 'cccccccccccccccccccccccccccccccccccccccc', 'r2/', 'completed', '', 50, 'lsif-go'),
+		(3, 'dddddddddddddddddddddddddddddddddddddddd', 'r1/', 'completed', '', 50, 'lsif-go'),
+		(4, 'ffffffffffffffffffffffffffffffffffffffff', 'r3/', 'completed', '', 50, 'lsif-go'),
+		(5, 'gggggggggggggggggggggggggggggggggggggggg', 'r4/', 'completed', '', 50, 'lsif-go'),
+		(6, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'r1/', 'completed', '', 50, 'lsif-tsc'),
+		(7, 'cccccccccccccccccccccccccccccccccccccccc', 'r2/', 'completed', '', 50, 'lsif-tsc'),
+		(8, 'dddddddddddddddddddddddddddddddddddddddd', '', 'completed', '', 50, 'lsif-tsc'),
+		(9, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'r3/', 'completed', '', 50, 'lsif-tsc')
+	`
+	if _, err := db.db.Query(uploadsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	commitsQuery := `
+		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
+		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
+		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
+		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'cccccccccccccccccccccccccccccccccccccccc'),
+		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
+		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
+		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'ffffffffffffffffffffffffffffffffffffffff')
+	`
+	if _, err := db.db.Query(commitsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	err := db.updateDumpsVisibleFromTip(nil, 50, "ffffffffffffffffffffffffffffffffffffffff")
+	if err != nil {
+		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
+	}
+
+	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	visibility := map[int]bool{}
+	for rows.Next() {
+		var id int
+		var visibleAtTip bool
+		if err := rows.Scan(&id, &visibleAtTip); err != nil {
+			t.Fatal(err)
+		}
+
+		visibility[id] = visibleAtTip
+	}
+
+	expected := map[int]bool{1: false, 2: true, 3: true, 4: true, 5: false, 6: false, 7: false, 8: false, 9: true}
+	if !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
+}
+
+func TestUpdateDumpsVisibleFromTipBranchingPaths(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	// This database has the following commit graph:
+	//
+	// a --+-- [b] --- c ---+
+	//     |                |
+	//     +--- d --- [e] --+ -- [h] --+-- [i]
+	//     |                           |
+	//     +-- [f] --- g --------------+
+
+	uploadsQuery := `
+		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
+		(1, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'r2/', 'completed', '', 50, 'lsif-go'),
+		(2, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'r2/a/', 'completed', '', 50, 'lsif-go'),
+		(3, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'r2/b/', 'completed', '', 50, 'lsif-go'),
+		(4, 'ffffffffffffffffffffffffffffffffffffffff', 'r1/a/', 'completed', '', 50, 'lsif-go'),
+		(5, 'ffffffffffffffffffffffffffffffffffffffff', 'r1/b/', 'completed', '', 50, 'lsif-go'),
+		(6, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'r1/', 'completed', '', 50, 'lsif-go'),
+		(7, 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii', 'r3/', 'completed', '', 50, 'lsif-go')
+	`
+	if _, err := db.db.Query(uploadsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	commitsQuery := `
+		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
+		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
+		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
+		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
+		(50, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
+		(50, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'cccccccccccccccccccccccccccccccccccccccc'),
+		(50, 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii', 'gggggggggggggggggggggggggggggggggggggggg'),
+		(50, 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii', 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh'),
+		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'ffffffffffffffffffffffffffffffffffffffff')
+	`
+	if _, err := db.db.Query(commitsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	err := db.updateDumpsVisibleFromTip(nil, 50, "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii")
+	if err != nil {
+		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
+	}
+
+	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	visibility := map[int]bool{}
+	for rows.Next() {
+		var id int
+		var visibleAtTip bool
+		if err := rows.Scan(&id, &visibleAtTip); err != nil {
+			t.Fatal(err)
+		}
+
+		visibility[id] = visibleAtTip
+	}
+
+	expected := map[int]bool{1: false, 2: true, 3: true, 4: false, 5: false, 6: true, 7: true}
+	if !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
+}
+
+func TestUpdateDumpsVisibleFromTipMaxTraversalLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	// This repository has the following commit graph (ancestors to the left):
+	//
+	// (MAX_TRAVERSAL_LIMIT + 1) -- ... -- 2 -- 1 -- 0
+
+	var values []*sqlf.Query
+	for i := 0; i < MaxTraversalLimit+1; i++ {
+		v := sqlf.Sprintf(
+			"(50, %s, %s)",
+			fmt.Sprintf("%040d", i),
+			fmt.Sprintf("%040d", i+1),
+		)
+		values = append(values, v)
+	}
+
+	uploadsQuery := `
+		INSERT INTO lsif_uploads (id, commit, state, tracing_context, repository_id, indexer) VALUES
+		(1, $1, 'completed', '', 50, 'lsif-go')
+	`
+	if _, err := db.db.Exec(uploadsQuery, fmt.Sprintf("%040d", MaxTraversalLimit)); err != nil {
+		t.Fatal(err)
+	}
+
+	commitsQuery := sqlf.Sprintf(`INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES %s`, sqlf.Join(values, ", "))
+	if _, err := db.db.Query(commitsQuery.Query(sqlf.PostgresBindVar), commitsQuery.Args()...); err != nil {
+		// TODO - exec, never query
+		t.Fatal(err)
+	}
+
+	getVisible := func() map[int]bool {
+		rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+
+		visibility := map[int]bool{}
+		for rows.Next() {
+			var id int
+			var visibleAtTip bool
+			if err := rows.Scan(&id, &visibleAtTip); err != nil {
+				t.Fatal(err)
+			}
+
+			visibility[id] = visibleAtTip
+		}
+
+		return visibility
+	}
+
+	if err := db.updateDumpsVisibleFromTip(nil, 50, fmt.Sprintf("%040d", MaxTraversalLimit)); err != nil {
+		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
+	}
+
+	visibility := getVisible()
+	expected := map[int]bool{1: true}
+	if !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
+
+	if err := db.updateDumpsVisibleFromTip(nil, 50, fmt.Sprintf("%040d", 1)); err != nil {
+		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
+	}
+
+	visibility = getVisible()
+	expected = map[int]bool{1: true}
+	if !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
+
+	if err := db.updateDumpsVisibleFromTip(nil, 50, fmt.Sprintf("%040d", 0)); err != nil {
+		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
+	}
+
+	visibility = getVisible()
+	expected = map[int]bool{1: false}
 	if !reflect.DeepEqual(visibility, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
 	}

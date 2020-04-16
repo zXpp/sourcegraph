@@ -255,7 +255,18 @@ func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (
 }
 
 // TODO - test this more
-func (db *dbImpl) updateDumpsVisibleFromTip(tx *sql.Tx, repositoryID int, tipCommit string) error {
+func (db *dbImpl) updateDumpsVisibleFromTip(tx *sql.Tx, repositoryID int, tipCommit string) (err error) {
+	if tx == nil {
+		tx, err = db.db.BeginTx(context.Background(), nil)
+		if err != nil {
+			return
+		}
+
+		defer func() {
+			err = closeTx(tx, err)
+		}()
+	}
+
 	query2 := "WITH " + ancestorLineage + ", " + visibleDumps + `
 		-- Update dump records by:
 		--   (1) unsetting the visibility flag of all previously visible dumps, and
@@ -265,8 +276,8 @@ func (db *dbImpl) updateDumpsVisibleFromTip(tx *sql.Tx, repositoryID int, tipCom
 		WHERE d.repository_id = $1 AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
 	`
 
-	_, err := tx.ExecContext(context.Background(), query2, repositoryID, tipCommit)
-	return err
+	_, err = tx.ExecContext(context.Background(), query2, repositoryID, tipCommit)
+	return
 }
 
 func (db *dbImpl) ResetStalled() ([]int, error) {

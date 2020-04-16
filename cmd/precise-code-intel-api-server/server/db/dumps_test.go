@@ -414,7 +414,7 @@ func TestFindClosestDumpsOverlappingRoots(t *testing.T) {
 	}
 }
 
-func TestFindClosestDumpsTraversalLimit(t *testing.T) {
+func TestFindClosestDumpsMaxTraversalLimit(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
