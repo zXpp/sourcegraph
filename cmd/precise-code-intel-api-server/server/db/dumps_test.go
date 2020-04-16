@@ -81,12 +81,6 @@ func TestFindClosestDumps(t *testing.T) {
 	//       |              |           |
 	//       +-- [3] -- 4 --+           +--- 8
 
-	insertUploads(t, db.db,
-		Upload{ID: 1, Commit: makeCommit(1)},
-		Upload{ID: 2, Commit: makeCommit(3)},
-		Upload{ID: 3, Commit: makeCommit(7)},
-	)
-
 	insertCommits(t, db.db, map[string][]string{
 		makeCommit(1): {},
 		makeCommit(2): {makeCommit(1)},
@@ -98,42 +92,22 @@ func TestFindClosestDumps(t *testing.T) {
 		makeCommit(8): {makeCommit(6)},
 	})
 
-	testCases := []struct {
-		commit      string
-		expectedIDs []int
-	}{
-		{commit: makeCommit(1), expectedIDs: []int{1}},
-		{commit: makeCommit(2), expectedIDs: []int{1}},
-		{commit: makeCommit(3), expectedIDs: []int{2}},
-		{commit: makeCommit(4), expectedIDs: []int{2}},
-		{commit: makeCommit(6), expectedIDs: []int{3}},
-		{commit: makeCommit(7), expectedIDs: []int{3}},
-		{commit: makeCommit(5), expectedIDs: []int{1, 2, 3}},
-		{commit: makeCommit(8), expectedIDs: []int{1, 2}},
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(1)},
+		Upload{ID: 2, Commit: makeCommit(3)},
+		Upload{ID: 3, Commit: makeCommit(7)},
+	)
 
-	for _, testCase := range testCases {
-		t.Run(fmt.Sprintf("commit=%s", testCase.commit), func(t *testing.T) {
-			dumps, err := db.FindClosestDumps(50, testCase.commit, "file.ts")
-			if err != nil {
-				t.Fatalf("unexpected error finding closest dumps: %s", err)
-			}
-			if len(dumps) != 1 {
-				t.Errorf("unexpected nearest dump length. want=%d have=%d", 1, len(dumps))
-			}
-
-			var found bool
-			for _, id := range testCase.expectedIDs {
-				if id == dumps[0].ID {
-					found = true
-				}
-			}
-
-			if !found {
-				t.Errorf("unexpected nearest dump ids. want one of %v have=%v", testCase.expectedIDs, dumps[0].ID)
-			}
-		})
-	}
+	testFindClosestDumps(t, db, []FindClosestDumpsTestCase{
+		{commit: makeCommit(1), file: "file.ts", anyOfIDs: []int{1}},
+		{commit: makeCommit(2), file: "file.ts", anyOfIDs: []int{1}},
+		{commit: makeCommit(3), file: "file.ts", anyOfIDs: []int{2}},
+		{commit: makeCommit(4), file: "file.ts", anyOfIDs: []int{2}},
+		{commit: makeCommit(6), file: "file.ts", anyOfIDs: []int{3}},
+		{commit: makeCommit(7), file: "file.ts", anyOfIDs: []int{3}},
+		{commit: makeCommit(5), file: "file.ts", anyOfIDs: []int{1, 2, 3}},
+		{commit: makeCommit(8), file: "file.ts", anyOfIDs: []int{1, 2}},
+	})
 }
 
 func TestFindClosestDumpsAlternateCommitGraph(t *testing.T) {
@@ -151,10 +125,6 @@ func TestFindClosestDumpsAlternateCommitGraph(t *testing.T) {
 	//              |
 	//              +-- 7 -- 8
 
-	insertUploads(t, db.db,
-		Upload{ID: 1, Commit: makeCommit(2)},
-	)
-
 	insertCommits(t, db.db, map[string][]string{
 		makeCommit(1): {},
 		makeCommit(2): {makeCommit(1)},
@@ -166,48 +136,20 @@ func TestFindClosestDumpsAlternateCommitGraph(t *testing.T) {
 		makeCommit(8): {makeCommit(7)},
 	})
 
-	testCases := []struct {
-		commit      string
-		expectedIDs []int
-	}{
-		{commit: makeCommit(1), expectedIDs: []int{1}},
-		{commit: makeCommit(2), expectedIDs: []int{1}},
-		{commit: makeCommit(3), expectedIDs: []int{1}},
-		{commit: makeCommit(4), expectedIDs: []int{}},
-		{commit: makeCommit(6), expectedIDs: []int{}},
-		{commit: makeCommit(7), expectedIDs: []int{}},
-		{commit: makeCommit(5), expectedIDs: []int{}},
-		{commit: makeCommit(8), expectedIDs: []int{}},
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(2)},
+	)
 
-	for _, testCase := range testCases {
-		t.Run(fmt.Sprintf("commit=%s", testCase.commit), func(t *testing.T) {
-			dumps, err := db.FindClosestDumps(50, testCase.commit, "file.ts")
-			if err != nil {
-				t.Fatalf("unexpected error finding closest dumps: %s", err)
-			}
-			if len(testCase.expectedIDs) == 0 {
-				if len(dumps) != 0 {
-					t.Errorf("unexpected nearest dump length. want=%d have=%d", 0, len(dumps))
-				}
-				return
-			}
-			if len(dumps) != 1 {
-				t.Errorf("unexpected nearest dump length. want=%d have=%d", 1, len(dumps))
-			}
-
-			var found bool
-			for _, id := range testCase.expectedIDs {
-				if id == dumps[0].ID {
-					found = true
-				}
-			}
-
-			if !found {
-				t.Errorf("unexpected nearest dump ids. want one of %v have=%v", testCase.expectedIDs, dumps[0].ID)
-			}
-		})
-	}
+	testFindClosestDumps(t, db, []FindClosestDumpsTestCase{
+		{commit: makeCommit(1), allOfIDs: []int{1}},
+		{commit: makeCommit(2), allOfIDs: []int{1}},
+		{commit: makeCommit(3), allOfIDs: []int{1}},
+		{commit: makeCommit(4)},
+		{commit: makeCommit(6)},
+		{commit: makeCommit(7)},
+		{commit: makeCommit(5)},
+		{commit: makeCommit(8)},
+	})
 }
 
 func TestFindClosestDumpsDistinctRoots(t *testing.T) {
@@ -220,60 +162,24 @@ func TestFindClosestDumpsDistinctRoots(t *testing.T) {
 	// This database has the following commit graph:
 	//
 	// 1 --+-- [2]
-	//
-	// Where LSIF dumps exist at b at roots: root1/ and root2/.
-
-	insertUploads(t, db.db,
-		Upload{ID: 1, Commit: makeCommit(1), Root: "root1/"},
-		Upload{ID: 2, Commit: makeCommit(2), Root: "root2/"},
-	)
 
 	insertCommits(t, db.db, map[string][]string{
 		makeCommit(1): {},
-		makeCommit(2): {makeCommit(1)}})
+		makeCommit(2): {makeCommit(1)},
+	})
 
-	testCases := []struct {
-		commit      string
-		file        string
-		expectedIDs []int
-	}{
-		{commit: makeCommit(1), file: "blah", expectedIDs: []int{}},
-		{commit: makeCommit(2), file: "root1/file.ts", expectedIDs: []int{1}},
-		{commit: makeCommit(1), file: "root2/file.ts", expectedIDs: []int{2}},
-		{commit: makeCommit(2), file: "root2/file.ts", expectedIDs: []int{2}},
-		{commit: makeCommit(1), file: "root3/file.ts", expectedIDs: []int{}},
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(2), Root: "root1/"},
+		Upload{ID: 2, Commit: makeCommit(2), Root: "root2/"},
+	)
 
-	for _, testCase := range testCases {
-		name := fmt.Sprintf("commit=%s file=%s", testCase.commit, testCase.file)
-
-		t.Run(name, func(t *testing.T) {
-			dumps, err := db.FindClosestDumps(50, testCase.commit, testCase.file)
-			if err != nil {
-				t.Fatalf("unexpected error finding closest dumps: %s", err)
-			}
-			if len(testCase.expectedIDs) == 0 {
-				if len(dumps) != 0 {
-					t.Errorf("unexpected nearest dump length. want=%d have=%d", 0, len(dumps))
-				}
-				return
-			}
-			if len(dumps) != 1 {
-				t.Errorf("unexpected nearest dump length. want=%d have=%d", 1, len(dumps))
-			}
-
-			var found bool
-			for _, id := range testCase.expectedIDs {
-				if id == dumps[0].ID {
-					found = true
-				}
-			}
-
-			if !found {
-				t.Errorf("unexpected nearest dump ids. want one of %v have=%v", testCase.expectedIDs, dumps[0].ID)
-			}
-		})
-	}
+	testFindClosestDumps(t, db, []FindClosestDumpsTestCase{
+		{commit: makeCommit(1), file: "blah"},
+		{commit: makeCommit(2), file: "root1/file.ts", allOfIDs: []int{1}},
+		{commit: makeCommit(1), file: "root2/file.ts", allOfIDs: []int{2}},
+		{commit: makeCommit(2), file: "root2/file.ts", allOfIDs: []int{2}},
+		{commit: makeCommit(1), file: "root3/file.ts"},
+	})
 }
 
 func TestFindClosestDumpsOverlappingRoots(t *testing.T) {
@@ -303,6 +209,15 @@ func TestFindClosestDumpsOverlappingRoots(t *testing.T) {
 	// | 5      | root2/  | lsif-go | (overwrites root2/ at commit 2)
 	// | 6      | root1/  | lsif-go | (overwrites root1/ at commit 2)
 
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(2)},
+		makeCommit(4): {makeCommit(2)},
+		makeCommit(5): {makeCommit(3), makeCommit(4)},
+		makeCommit(6): {makeCommit(5)},
+	})
+
 	insertUploads(t, db.db,
 		Upload{ID: 1, Commit: makeCommit(1), Root: "root3/"},
 		Upload{ID: 2, Commit: makeCommit(1), Root: "root4/", Indexer: "lsif-py"},
@@ -315,62 +230,13 @@ func TestFindClosestDumpsOverlappingRoots(t *testing.T) {
 		Upload{ID: 9, Commit: makeCommit(6), Root: "root1/"},
 	)
 
-	insertCommits(t, db.db, map[string][]string{
-		makeCommit(1): {},
-		makeCommit(2): {makeCommit(1)},
-		makeCommit(3): {makeCommit(2)},
-		makeCommit(4): {makeCommit(2)},
-		makeCommit(5): {makeCommit(3), makeCommit(4)},
-		makeCommit(6): {makeCommit(5)},
+	testFindClosestDumps(t, db, []FindClosestDumpsTestCase{
+		{commit: makeCommit(4), file: "root1/file.ts", allOfIDs: []int{7, 3}},
+		{commit: makeCommit(5), file: "root2/file.ts", allOfIDs: []int{8, 7}},
+		{commit: makeCommit(3), file: "root3/file.ts", allOfIDs: []int{5, 1}},
+		{commit: makeCommit(1), file: "root4/file.ts", allOfIDs: []int{2}},
+		{commit: makeCommit(2), file: "root4/file.ts", allOfIDs: []int{5}},
 	})
-
-	testCases := []struct {
-		commit      string
-		file        string
-		expectedIDs []int
-	}{
-		{commit: makeCommit(4), file: "root1/file.ts", expectedIDs: []int{7, 3}},
-		{commit: makeCommit(5), file: "root2/file.ts", expectedIDs: []int{8, 7}},
-		{commit: makeCommit(3), file: "root3/file.ts", expectedIDs: []int{5, 1}},
-		{commit: makeCommit(1), file: "root4/file.ts", expectedIDs: []int{2}},
-		{commit: makeCommit(2), file: "root4/file.ts", expectedIDs: []int{5}},
-	}
-
-	for _, testCase := range testCases {
-		name := fmt.Sprintf("commit=%s file=%s", testCase.commit, testCase.file)
-
-		t.Run(name, func(t *testing.T) {
-			dumps, err := db.FindClosestDumps(50, testCase.commit, testCase.file)
-			if err != nil {
-				t.Fatalf("unexpected error finding closest dumps: %s", err)
-			}
-			if len(testCase.expectedIDs) == 0 {
-				if len(dumps) != 0 {
-					t.Errorf("unexpected nearest dump length. want=%d have=%d", 0, len(dumps))
-				}
-				return
-			}
-			if len(dumps) != len(testCase.expectedIDs) {
-				t.Errorf("unexpected nearest dump length. want=%d have=%d", 1, len(dumps))
-			}
-
-			allPresent := true
-			for _, id := range testCase.expectedIDs {
-				var found bool
-				for _, dump := range dumps {
-					if id == dump.ID {
-						found = true
-					}
-				}
-
-				allPresent = allPresent && found
-			}
-
-			if !allPresent {
-				t.Errorf("unexpected nearest dump ids. want one of %v have=%v", testCase.expectedIDs, dumps[0].ID)
-			}
-		})
-	}
 }
 
 func TestFindClosestDumpsMaxTraversalLimit(t *testing.T) {
@@ -383,16 +249,7 @@ func TestFindClosestDumpsMaxTraversalLimit(t *testing.T) {
 	// This repository has the following commit graph (ancestors to the left):
 	//
 	// MAX_TRAVERSAL_LIMIT -- ... -- 2 -- 1 -- 0
-
-	commits := map[string][]string{}
-	for i := 0; i < MaxTraversalLimit; i++ {
-		commits[makeCommit(i)] = []string{makeCommit(i + 1)}
-	}
-
-	insertCommits(t, db.db, commits)
-	insertUploads(t, db.db, Upload{ID: 1, Commit: makeCommit(0)})
-
-	// (Assuming MAX_TRAVERSAL_LIMIT = 100)
+	//
 	// At commit `50`, the traversal limit will be reached before visiting commit `0`
 	// because commits are visited in this order:
 	//
@@ -408,52 +265,20 @@ func TestFindClosestDumpsMaxTraversalLimit(t *testing.T) {
 	// | 99    | 99     |
 	// | 100   | 1      | (limit reached)
 
-	testCases := []struct {
-		commit      string
-		file        string
-		expectedIDs []int
-	}{
-		{commit: makeCommit(0), file: "file.ts", expectedIDs: []int{1}},
-		{commit: makeCommit(1), file: "file.ts", expectedIDs: []int{1}},
-		{commit: makeCommit(MaxTraversalLimit/2 - 1), file: "file.ts", expectedIDs: []int{1}},
-		{commit: makeCommit(MaxTraversalLimit / 2), file: "file.ts", expectedIDs: []int{}},
+	commits := map[string][]string{}
+	for i := 0; i < MaxTraversalLimit; i++ {
+		commits[makeCommit(i)] = []string{makeCommit(i + 1)}
 	}
 
-	for _, testCase := range testCases {
-		name := fmt.Sprintf("commit=%s file=%s", testCase.commit, testCase.file)
+	insertCommits(t, db.db, commits)
+	insertUploads(t, db.db, Upload{ID: 1, Commit: makeCommit(0)})
 
-		t.Run(name, func(t *testing.T) {
-			dumps, err := db.FindClosestDumps(50, testCase.commit, testCase.file)
-			if err != nil {
-				t.Fatalf("unexpected error finding closest dumps: %s", err)
-			}
-			if len(testCase.expectedIDs) == 0 {
-				if len(dumps) != 0 {
-					t.Errorf("unexpected nearest dump length. want=%d have=%d", 0, len(dumps))
-				}
-				return
-			}
-			if len(dumps) != len(testCase.expectedIDs) {
-				t.Errorf("unexpected nearest dump length. want=%d have=%d", 1, len(dumps))
-			}
-
-			allPresent := true
-			for _, id := range testCase.expectedIDs {
-				var found bool
-				for _, dump := range dumps {
-					if id == dump.ID {
-						found = true
-					}
-				}
-
-				allPresent = allPresent && found
-			}
-
-			if !allPresent {
-				t.Errorf("unexpected nearest dump ids. want one of %v have=%v", testCase.expectedIDs, dumps)
-			}
-		})
-	}
+	testFindClosestDumps(t, db, []FindClosestDumpsTestCase{
+		{commit: makeCommit(0), file: "file.ts", allOfIDs: []int{1}},
+		{commit: makeCommit(1), file: "file.ts", allOfIDs: []int{1}},
+		{commit: makeCommit(MaxTraversalLimit/2 - 1), file: "file.ts", allOfIDs: []int{1}},
+		{commit: makeCommit(MaxTraversalLimit / 2), file: "file.ts"},
+	})
 }
 
 func TestDoPrune(t *testing.T) {
@@ -499,4 +324,79 @@ func TestDoPrune(t *testing.T) {
 	} else if id != 3 {
 		t.Errorf("unexpected pruned identifier. want=%v have=%v", 3, id)
 	}
+}
+
+type FindClosestDumpsTestCase struct {
+	commit   string
+	file     string
+	anyOfIDs []int
+	allOfIDs []int
+}
+
+func testFindClosestDumps(t *testing.T, db DB, testCases []FindClosestDumpsTestCase) {
+	for _, testCase := range testCases {
+		name := fmt.Sprintf("commit=%s file=%s", testCase.commit, testCase.file)
+
+		t.Run(name, func(t *testing.T) {
+			dumps, err := db.FindClosestDumps(50, testCase.commit, testCase.file)
+			if err != nil {
+				t.Fatalf("unexpected error finding closest dumps: %s", err)
+			}
+
+			if len(testCase.anyOfIDs) > 0 {
+				testAnyOf(t, dumps, testCase.anyOfIDs)
+				return
+			}
+
+			if len(testCase.allOfIDs) > 0 {
+				testAllOf(t, dumps, testCase.allOfIDs)
+				return
+			}
+
+			if len(dumps) != 0 {
+				t.Errorf("unexpected nearest dump length. want=%d have=%d", 0, len(dumps))
+				return
+			}
+		})
+	}
+}
+
+func testAnyOf(t *testing.T, dumps []Dump, expectedIDs []int) {
+	if len(dumps) != 1 {
+		t.Errorf("unexpected nearest dump length. want=%d have=%d", 1, len(dumps))
+		return
+	}
+
+	if !testPresence(dumps[0].ID, expectedIDs) {
+		t.Errorf("unexpected nearest dump ids. want one of %v have=%v", expectedIDs, dumps[0].ID)
+	}
+}
+
+func testAllOf(t *testing.T, dumps []Dump, expectedIDs []int) {
+	if len(dumps) != len(expectedIDs) {
+		t.Errorf("unexpected nearest dump length. want=%d have=%d", 1, len(dumps))
+	}
+
+	var dumpIDs []int
+	for _, dump := range dumps {
+		dumpIDs = append(dumpIDs, dump.ID)
+	}
+
+	for _, expectedID := range expectedIDs {
+		if !testPresence(expectedID, dumpIDs) {
+			t.Errorf("unexpected nearest dump ids. want all of %v have=%v", expectedIDs, dumpIDs)
+			return
+		}
+	}
+
+}
+
+func testPresence(needle int, haystack []int) bool {
+	for _, candidate := range haystack {
+		if needle == candidate {
+			return true
+		}
+	}
+
+	return false
 }
