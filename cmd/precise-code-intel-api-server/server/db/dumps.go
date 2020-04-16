@@ -26,6 +26,25 @@ type Dump struct {
 	// ProcessedAt       time.Time  `json:"processedAt"`
 }
 
+func scanDump(scanner Scanner) (dump Dump, err error) {
+	err = scanner.Scan(
+		&dump.ID,
+		&dump.Commit,
+		&dump.Root,
+		&dump.VisibleAtTip,
+		&dump.UploadedAt,
+		&dump.State,
+		&dump.FailureSummary,
+		&dump.FailureStacktrace,
+		&dump.StartedAt,
+		&dump.FinishedAt,
+		&dump.TracingContext,
+		&dump.RepositoryID,
+		&dump.Indexer,
+	)
+	return
+}
+
 func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 	query := sqlf.Sprintf(`
 		SELECT
@@ -45,22 +64,8 @@ func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 		FROM lsif_uploads u WHERE id = %d
 	`, id) // TODO - should ensure state as well?
 
-	var dump Dump
-	if err := db.db.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...).Scan(
-		&dump.ID,
-		&dump.Commit,
-		&dump.Root,
-		&dump.VisibleAtTip,
-		&dump.UploadedAt,
-		&dump.State,
-		&dump.FailureSummary,
-		&dump.FailureStacktrace,
-		&dump.StartedAt,
-		&dump.FinishedAt,
-		&dump.TracingContext,
-		&dump.RepositoryID,
-		&dump.Indexer,
-	); err != nil {
+	dump, err := scanDump(db.db.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...))
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return Dump{}, false, nil
 		}
@@ -84,8 +89,8 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 
 	var qs []*sqlf.Query
 	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
+		id, err := scanInt(rows)
+		if err != nil {
 			return nil, err
 		}
 
@@ -121,22 +126,8 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 
 	var dumps []Dump
 	for rows2.Next() {
-		dump := Dump{}
-		if err := rows2.Scan(
-			&dump.ID,
-			&dump.Commit,
-			&dump.Root,
-			&dump.VisibleAtTip,
-			&dump.UploadedAt,
-			&dump.State,
-			&dump.FailureSummary,
-			&dump.FailureStacktrace,
-			&dump.StartedAt,
-			&dump.FinishedAt,
-			&dump.TracingContext,
-			&dump.RepositoryID,
-			&dump.Indexer,
-		); err != nil {
+		dump, err := scanDump(rows2)
+		if err != nil {
 			return nil, err
 		}
 
@@ -152,8 +143,8 @@ func (db *dbImpl) DoPrune() (int, bool, error) {
 	// TODO - should only be completed
 	query := "DELETE FROM lsif_uploads WHERE ctid IN (SELECT ctid FROM lsif_uploads WHERE visible_at_tip = false ORDER BY uploaded_at LIMIT 1) RETURNING id"
 
-	var id int
-	if err := db.db.QueryRowContext(context.Background(), query).Scan(&id); err != nil {
+	id, err := scanInt(db.db.QueryRowContext(context.Background(), query))
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, false, nil
 		}

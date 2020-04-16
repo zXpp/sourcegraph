@@ -6,6 +6,28 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+type Scanner interface {
+	Scan(targets ...interface{}) error
+}
+
+func scanInt(scanner Scanner) (value int, err error) {
+	err = scanner.Scan(&value)
+	return
+}
+
+func scanInts(rows *sql.Rows) (values []int, err error) {
+	for rows.Next() {
+		var value int
+		value, err = scanInt(rows)
+		if err != nil {
+			return
+		}
+
+		values = append(values, value)
+	}
+	return
+}
+
 type TxCloser interface {
 	CloseTx(err error) error
 }

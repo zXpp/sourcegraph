@@ -12,8 +12,26 @@ type Reference struct {
 	Filter string
 }
 
+func scanReference(scanner Scanner) (reference Reference, err error) {
+	err = scanner.Scan(&reference.DumpID, &reference.Filter)
+	return
+}
+
+func scanReferences(rows *sql.Rows) (references []Reference, err error) {
+	for rows.Next() {
+		var reference Reference
+		reference, err = scanReference(rows)
+		if err != nil {
+			return
+		}
+
+		references = append(references, reference)
+	}
+	return
+}
+
 func (db *dbImpl) GetPackage(scheme, name, version string) (Dump, bool, error) {
-	query := `
+	query := sqlf.Sprintf(`
 		SELECT
 			u.id,
 			u.commit,
@@ -30,26 +48,12 @@ func (db *dbImpl) GetPackage(scheme, name, version string) (Dump, bool, error) {
 			u.indexer
 		FROM lsif_packages p
 		JOIN lsif_uploads u ON p.dump_id = u.id
-		WHERE p.scheme = $1 AND p.name = $2 AND p.version = $3
+		WHERE p.scheme = %s AND p.name = %s AND p.version = %s
 		LIMIT 1
-	`
+	`, scheme, name, version)
 
-	dump := Dump{}
-	if err := db.db.QueryRowContext(context.Background(), query, scheme, name, version).Scan(
-		&dump.ID,
-		&dump.Commit,
-		&dump.Root,
-		&dump.VisibleAtTip,
-		&dump.UploadedAt,
-		&dump.State,
-		&dump.FailureSummary,
-		&dump.FailureStacktrace,
-		&dump.StartedAt,
-		&dump.FinishedAt,
-		&dump.TracingContext,
-		&dump.RepositoryID,
-		&dump.Indexer,
-	); err != nil {
+	dump, err := scanDump(db.db.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...))
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return Dump{}, false, nil
 		}
@@ -74,8 +78,8 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 
 	var visibleIDs []int
 	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
+		id, err := scanInt(rows)
+		if err != nil {
 			return 0, nil, closeTx(tx, err)
 		}
 
@@ -96,8 +100,8 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 		WHERE r.scheme = %s AND r.name = %s AND r.version = %s AND r.dump_id IN (%s)
 	`, scheme, name, version, sqlf.Join(qs, ", "))
 
-	var totalCount int
-	if err := tx.QueryRowContext(context.Background(), cq.Query(sqlf.PostgresBindVar), cq.Args()...).Scan(&totalCount); err != nil {
+	totalCount, err := scanInt(tx.QueryRowContext(context.Background(), cq.Query(sqlf.PostgresBindVar), cq.Args()...))
+	if err != nil {
 		return 0, nil, closeTx(tx, err)
 	}
 
@@ -115,20 +119,12 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 		}
 		defer rows.Close()
 
-		var refs []Reference
-		for rows.Next() {
-			var dumpID int
-			var filter string
-
-			if err := rows.Scan(&dumpID, &filter); err != nil {
-				return nil, err
-			}
-
-			refs = append(refs, Reference{dumpID, filter})
+		references, err := scanReferences(rows)
+		if err != nil {
+			return nil, err
 		}
 
-		return refs, nil
-
+		return references, nil
 	}
 
 	return totalCount, newReferencePager(tx, pageFromOffset), nil
@@ -140,44 +136,37 @@ func (db *dbImpl) PackageReferencePager(scheme, name, version string, repository
 		return 0, nil, err
 	}
 
-	query := `
+	query := sqlf.Sprintf(`
 		SELECT COUNT(1) FROM lsif_references r
 		LEFT JOIN lsif_dumps d ON r.dump_id = d.id
-		WHERE scheme = $1 AND name = $2 AND version = $3 AND d.repository_id != $4 AND d.visible_at_tip = true
-	`
+		WHERE scheme = %s AND name = %s AND version = %s AND d.repository_id != %s AND d.visible_at_tip = true
+	`, scheme, name, version, repositoryID)
 
-	var totalCount int
-	if err := tx.QueryRowContext(context.Background(), query, scheme, name, version, repositoryID).Scan(&totalCount); err != nil {
+	totalCount, err := scanInt(tx.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...))
+	if err != nil {
 		return 0, nil, closeTx(tx, err)
 	}
 
 	pageFromOffset := func(offset int) ([]Reference, error) {
-		queryx := `
+		queryx := sqlf.Sprintf(`
 			SELECT d.id, r.filter FROM lsif_references r
 			LEFT JOIN lsif_dumps d ON r.dump_id = d.id
-			WHERE scheme = $1 AND name = $2 AND version = $3 AND d.repository_id != $4 AND d.visible_at_tip = true
-			ORDER BY d.repository_id, d.root LIMIT $5 OFFSET $6
-		`
+			WHERE scheme = %s AND name = %s AND version = %s AND d.repository_id != %s AND d.visible_at_tip = true
+			ORDER BY d.repository_id, d.root LIMIT %s OFFSET %s
+		`, scheme, name, version, repositoryID, limit, offset)
 
-		rows, err := tx.QueryContext(context.Background(), queryx, scheme, name, version, repositoryID, limit, offset)
+		rows, err := tx.QueryContext(context.Background(), queryx.Query(sqlf.PostgresBindVar), queryx.Args()...)
 		if err != nil {
 			return nil, err
 		}
 		defer rows.Close()
 
-		var refs []Reference
-		for rows.Next() {
-			var dumpID int
-			var filter string
-
-			if err := rows.Scan(&dumpID, &filter); err != nil {
-				return nil, err
-			}
-
-			refs = append(refs, Reference{dumpID, filter})
+		references, err := scanReferences(rows)
+		if err != nil {
+			return nil, err
 		}
 
-		return refs, nil
+		return references, nil
 	}
 
 	return totalCount, newReferencePager(tx, pageFromOffset), nil
