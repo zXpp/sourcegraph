@@ -92,6 +92,10 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 		qs = append(qs, sqlf.Sprintf("%d", id))
 	}
 
+	if len(qs) == 0 {
+		return nil, nil
+	}
+
 	// TODO - completed condition?
 	query2 := sqlf.Sprintf(`SELECT
 		u.id,

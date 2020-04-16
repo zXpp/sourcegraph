@@ -250,24 +250,23 @@ func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (
 		return
 	}
 
-	// TODO - do we need to discover commits here? The old
-	// implementation does it but my gut says no now that
-	// I think about it a bit more.
-
-	query2 := "WITH " + ancestorLineage + ", " + visibleDumps + `
-			-- Update dump records by:
-			--   (1) unsetting the visibility flag of all previously visible dumps, and
-			--   (2) setting the visibility flag of all currently visible dumps
-			UPDATE lsif_dumps d
-			SET visible_at_tip = id IN (SELECT * from visible_ids)
-			WHERE d.repository_id = $1 AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
-		`
-
-	if _, err = tx.ExecContext(context.Background(), query2, repositoryID, tipCommit); err != nil {
-		return
-	}
-
+	err = db.updateDumpsVisibleFromTip(tx, repositoryID, tipCommit)
 	return
+}
+
+// TODO - test this more
+func (db *dbImpl) updateDumpsVisibleFromTip(tx *sql.Tx, repositoryID int, tipCommit string) error {
+	query2 := "WITH " + ancestorLineage + ", " + visibleDumps + `
+		-- Update dump records by:
+		--   (1) unsetting the visibility flag of all previously visible dumps, and
+		--   (2) setting the visibility flag of all currently visible dumps
+		UPDATE lsif_dumps d
+		SET visible_at_tip = id IN (SELECT * from visible_ids)
+		WHERE d.repository_id = $1 AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
+	`
+
+	_, err := tx.ExecContext(context.Background(), query2, repositoryID, tipCommit)
+	return err
 }
 
 func (db *dbImpl) ResetStalled() ([]int, error) {

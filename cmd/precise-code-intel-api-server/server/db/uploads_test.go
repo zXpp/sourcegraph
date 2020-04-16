@@ -319,7 +319,135 @@ func TestGetStates(t *testing.T) {
 }
 
 func TestDeleteUploadByID(t *testing.T) {
-	// TODO
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	query := `
+		INSERT INTO lsif_uploads (
+			id, commit, state, visible_at_tip, tracing_context, repository_id, indexer
+		) VALUES (
+			1, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'completed', false, '', 50, 'lsif-go'
+		)
+	`
+	if _, err := db.db.Query(query); err != nil {
+		t.Fatal(err)
+	}
+
+	var called bool
+	getTipCommit := func(repositoryID int) (string, error) {
+		called = true
+		return "", nil
+	}
+
+	found, err := db.DeleteUploadByID(1, getTipCommit)
+	if err != nil {
+		t.Fatalf("unexpected error deleting upload: %s", err)
+	}
+	if !found {
+		t.Fatalf("expected record to exist")
+	}
+	if called {
+		t.Fatalf("unexpected call to getTipCommit")
+	}
+
+	// Upload no longer exists
+	if _, exists, err := db.GetUploadByID(1); err != nil {
+		t.Fatalf("unexpected error getting upload: %s", err)
+	} else if exists {
+		t.Fatal("unexpected record")
+	}
+}
+
+func TestDeleteUploadByIDMissingRow(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	getTipCommit := func(repositoryID int) (string, error) {
+		return "", nil
+	}
+
+	found, err := db.DeleteUploadByID(1, getTipCommit)
+	if err != nil {
+		t.Fatalf("unexpected error deleting upload: %s", err)
+	}
+	if found {
+		t.Fatalf("unexpected record")
+	}
+}
+
+func TestDeleteUploadByIDUpdatesVisibility(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	uploadsQuery := `
+		INSERT INTO lsif_uploads (id, commit, root, state, visible_at_tip, tracing_context, repository_id, indexer) VALUES
+		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'sub1/', 'completed', true, '', 50, 'lsif-go'),
+		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', 'sub2/', 'completed', true, '', 50, 'lsif-go'),
+		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', 'sub1/', 'completed', false, '', 50, 'lsif-go'),
+		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', 'sub2/', 'completed', false, '', 50, 'lsif-go')
+	`
+	if _, err := db.db.Query(uploadsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	commitsQuery := `
+		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
+		(50, 'deadbeef41deadbeef42deadbeef43deadbeef44', NULL),
+		(50, 'deadbeef31deadbeef32deadbeef33deadbeef34', 'deadbeef41deadbeef42deadbeef43deadbeef44'),
+		(50, 'deadbeef21deadbeef22deadbeef23deadbeef24', 'deadbeef31deadbeef32deadbeef33deadbeef34'),
+		(50, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'deadbeef21deadbeef22deadbeef23deadbeef24')
+	`
+	if _, err := db.db.Query(commitsQuery); err != nil {
+		t.Fatal(err)
+	}
+
+	var called bool
+	getTipCommit := func(repositoryID int) (string, error) {
+		called = true
+		return "deadbeef11deadbeef12deadbeef13deadbeef14", nil
+	}
+
+	found, err := db.DeleteUploadByID(1, getTipCommit)
+	if err != nil {
+		t.Fatalf("unexpected error deleting upload: %s", err)
+	}
+	if !found {
+		t.Fatalf("expected record to exist")
+	}
+	if !called {
+		t.Fatalf("expected call to getTipCommit")
+	}
+
+	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	visibility := map[int]bool{}
+	for rows.Next() {
+		var id int
+		var visibleAtTip bool
+		if err := rows.Scan(&id, &visibleAtTip); err != nil {
+			t.Fatal(err)
+		}
+
+		visibility[id] = visibleAtTip
+	}
+
+	expected := map[int]bool{2: true, 3: true, 4: false}
+	if !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
 }
 
 func TestResetStalled(t *testing.T) {

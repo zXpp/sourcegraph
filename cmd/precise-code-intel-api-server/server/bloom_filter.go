@@ -158,6 +158,7 @@ func fnv_1a(v string, seed int32) int32 {
 	for _, r := range v {
 		c := int32(r)
 		if d := c & 0xff00; d != 0 {
+			// TODO - this condition is never hit we should do some weirder characters
 			a = fnv_multiply(a ^ (d >> 8))
 		}
 		a = fnv_multiply(a ^ (c & 0xff))
