@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keegancsmith/sqlf"
 	"github.com/sourcegraph/sourcegraph/internal/db/dbconn"
 	"github.com/sourcegraph/sourcegraph/internal/db/dbtesting"
 )
@@ -28,23 +27,9 @@ func TestGetDumpByID(t *testing.T) {
 	t1 := time.Now().UTC()
 	t2 := t1.Add(time.Minute).UTC()
 	t3 := t1.Add(time.Minute * 2).UTC()
-	query := `
-		INSERT INTO lsif_uploads (
-			id, commit, root, visible_at_tip, uploaded_at, state,
-			failure_summary, failure_stacktrace, started_at, finished_at,
-			tracing_context, repository_id, indexer
-		) VALUES (
-			1, 'deadbeef01deadbeef02deadbeef03deadbeef04', 'sub/', true,
-			$1, 'completed', NULL, NULL, $2, $3, '{"id": 42}', 50, 'lsif-go'
-		)
-	`
-	if _, err := db.db.Exec(query, t1, t2, t3); err != nil {
-		t.Fatal(err)
-	}
-
 	expected := Dump{
 		ID:                1,
-		Commit:            "deadbeef01deadbeef02deadbeef03deadbeef04",
+		Commit:            makeCommit(1),
 		Root:              "sub/",
 		VisibleAtTip:      true,
 		UploadedAt:        t1,
@@ -57,6 +42,22 @@ func TestGetDumpByID(t *testing.T) {
 		RepositoryID:      50,
 		Indexer:           "lsif-go",
 	}
+
+	insertUploads(t, db.db, Upload{
+		ID:                expected.ID,
+		Commit:            expected.Commit,
+		Root:              expected.Root,
+		VisibleAtTip:      expected.VisibleAtTip,
+		UploadedAt:        expected.UploadedAt,
+		State:             expected.State,
+		FailureSummary:    expected.FailureSummary,
+		FailureStacktrace: expected.FailureStacktrace,
+		StartedAt:         expected.StartedAt,
+		FinishedAt:        expected.FinishedAt,
+		TracingContext:    expected.TracingContext,
+		RepositoryID:      expected.RepositoryID,
+		Indexer:           expected.Indexer,
+	})
 
 	if dump, exists, err := db.GetDumpByID(1); err != nil {
 		t.Fatalf("unexpected error getting dump: %s", err)
@@ -76,49 +77,39 @@ func TestFindClosestDumps(t *testing.T) {
 
 	// This database has the following commit graph:
 	//
-	// [a] --+--- b --------+--e -- f --+-- [g]
+	// [1] --+--- 2 --------+--5 -- 6 --+-- [7]
 	//       |              |           |
-	//       +-- [c] -- d --+           +--- h
+	//       +-- [3] -- 4 --+           +--- 8
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'completed', '', 50, 'lsif-go'),
-		(2, 'cccccccccccccccccccccccccccccccccccccccc', 'completed', '', 50, 'lsif-go'),
-		(3, 'gggggggggggggggggggggggggggggggggggggggg', 'completed', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Exec(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(1)},
+		Upload{ID: 2, Commit: makeCommit(3)},
+		Upload{ID: 3, Commit: makeCommit(7)},
+	)
 
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
-		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'cccccccccccccccccccccccccccccccccccccccc'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
-		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
-		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'ffffffffffffffffffffffffffffffffffffffff'),
-		(50, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'ffffffffffffffffffffffffffffffffffffffff')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		// TODO - exec, never query
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(1)},
+		makeCommit(4): {makeCommit(3)},
+		makeCommit(5): {makeCommit(2), makeCommit(4)},
+		makeCommit(6): {makeCommit(5)},
+		makeCommit(7): {makeCommit(6)},
+		makeCommit(8): {makeCommit(6)},
+	})
 
 	testCases := []struct {
 		commit      string
 		expectedIDs []int
 	}{
-		{commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", expectedIDs: []int{1}},
-		{commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", expectedIDs: []int{1}},
-		{commit: "cccccccccccccccccccccccccccccccccccccccc", expectedIDs: []int{2}},
-		{commit: "dddddddddddddddddddddddddddddddddddddddd", expectedIDs: []int{2}},
-		{commit: "ffffffffffffffffffffffffffffffffffffffff", expectedIDs: []int{3}},
-		{commit: "gggggggggggggggggggggggggggggggggggggggg", expectedIDs: []int{3}},
-		{commit: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", expectedIDs: []int{1, 2, 3}},
-		{commit: "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh", expectedIDs: []int{1, 2}},
+		{commit: makeCommit(1), expectedIDs: []int{1}},
+		{commit: makeCommit(2), expectedIDs: []int{1}},
+		{commit: makeCommit(3), expectedIDs: []int{2}},
+		{commit: makeCommit(4), expectedIDs: []int{2}},
+		{commit: makeCommit(6), expectedIDs: []int{3}},
+		{commit: makeCommit(7), expectedIDs: []int{3}},
+		{commit: makeCommit(5), expectedIDs: []int{1, 2, 3}},
+		{commit: makeCommit(8), expectedIDs: []int{1, 2}},
 	}
 
 	for _, testCase := range testCases {
@@ -154,51 +145,39 @@ func TestFindClosestDumpsAlternateCommitGraph(t *testing.T) {
 
 	// This database has the following commit graph:
 	//
-	// a --+-- [b] ---- c
+	// 1 --+-- [2] ---- 3
 	//     |
-	//     +--- d --+-- e -- f
+	//     +--- 4 --+-- 5 -- 6
 	//              |
-	//              +-- g -- h
+	//              +-- 7 -- 8
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (
-			id, commit, state, tracing_context, repository_id, indexer
-		) VALUES (
-			1, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'completed', '', 50, 'lsif-go'
-		)
-	`
-	if _, err := db.db.Exec(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(2)},
+	)
 
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
-		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
-		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
-		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'dddddddddddddddddddddddddddddddddddddddd'),
-		(50, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'gggggggggggggggggggggggggggggggggggggggg')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		// TODO - exec, never query
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(2)},
+		makeCommit(4): {makeCommit(1)},
+		makeCommit(5): {makeCommit(4)},
+		makeCommit(6): {makeCommit(5)},
+		makeCommit(7): {makeCommit(4)},
+		makeCommit(8): {makeCommit(7)},
+	})
 
 	testCases := []struct {
 		commit      string
 		expectedIDs []int
 	}{
-		{commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", expectedIDs: []int{1}},
-		{commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", expectedIDs: []int{1}},
-		{commit: "cccccccccccccccccccccccccccccccccccccccc", expectedIDs: []int{1}},
-		{commit: "dddddddddddddddddddddddddddddddddddddddd", expectedIDs: []int{}},
-		{commit: "ffffffffffffffffffffffffffffffffffffffff", expectedIDs: []int{}},
-		{commit: "gggggggggggggggggggggggggggggggggggggggg", expectedIDs: []int{}},
-		{commit: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", expectedIDs: []int{}},
-		{commit: "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh", expectedIDs: []int{}},
+		{commit: makeCommit(1), expectedIDs: []int{1}},
+		{commit: makeCommit(2), expectedIDs: []int{1}},
+		{commit: makeCommit(3), expectedIDs: []int{1}},
+		{commit: makeCommit(4), expectedIDs: []int{}},
+		{commit: makeCommit(6), expectedIDs: []int{}},
+		{commit: makeCommit(7), expectedIDs: []int{}},
+		{commit: makeCommit(5), expectedIDs: []int{}},
+		{commit: makeCommit(8), expectedIDs: []int{}},
 	}
 
 	for _, testCase := range testCases {
@@ -240,39 +219,29 @@ func TestFindClosestDumpsDistinctRoots(t *testing.T) {
 
 	// This database has the following commit graph:
 	//
-	// a --+-- [b]
+	// 1 --+-- [2]
 	//
 	// Where LSIF dumps exist at b at roots: root1/ and root2/.
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'root1/', 'completed', '', 50, 'lsif-go'),
-		(2, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'root2/', 'completed', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Exec(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(1), Root: "root1/"},
+		Upload{ID: 2, Commit: makeCommit(2), Root: "root2/"},
+	)
 
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
-		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		// TODO - exec, never query
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)}})
 
 	testCases := []struct {
 		commit      string
 		file        string
 		expectedIDs []int
 	}{
-		{commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", file: "blah", expectedIDs: []int{}},
-		{commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", file: "root1/file.ts", expectedIDs: []int{1}},
-		{commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", file: "root2/file.ts", expectedIDs: []int{2}},
-		{commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", file: "root2/file.ts", expectedIDs: []int{2}},
-		{commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", file: "root3/file.ts", expectedIDs: []int{}},
+		{commit: makeCommit(1), file: "blah", expectedIDs: []int{}},
+		{commit: makeCommit(2), file: "root1/file.ts", expectedIDs: []int{1}},
+		{commit: makeCommit(1), file: "root2/file.ts", expectedIDs: []int{2}},
+		{commit: makeCommit(2), file: "root2/file.ts", expectedIDs: []int{2}},
+		{commit: makeCommit(1), file: "root3/file.ts", expectedIDs: []int{}},
 	}
 
 	for _, testCase := range testCases {
@@ -316,65 +285,55 @@ func TestFindClosestDumpsOverlappingRoots(t *testing.T) {
 
 	// This database has the following commit graph:
 	//
-	// a -- b --+-- c --+-- e -- f
+	// 1 -- 2 --+-- 3 --+-- 5 -- 6
 	//          |       |
-	//          +-- d --+
+	//          +-- 4 --+
 	//
 	// With the following LSIF dumps:
 	//
 	// | Commit | Root    | Indexer |
 	// | ------ + ------- + ------- |
-	// | a      | root3/  | A       |
-	// | a      | root4/  | B       |
-	// | b      | root1/  | A       |
-	// | b      | root2/  | A       |
-	// | b      |         | B       | (overwrites root4/ at commit a)
-	// | c      | root1/  | A       | (overwrites root1/ at commit b)
-	// | d      |         | B       | (overwrites (root) at commit b)
-	// | e      | root2/  | A       | (overwrites root2/ at commit b)
-	// | f      | root1/  | A       | (overwrites root1/ at commit b)
+	// | 1      | root3/  | lsif-go |
+	// | 1      | root4/  | lsif-py |
+	// | 2      | root1/  | lsif-go |
+	// | 2      | root2/  | lsif-go |
+	// | 2      |         | lsif-py | (overwrites root4/ at commit 1)
+	// | 3      | root1/  | lsif-go | (overwrites root1/ at commit 2)
+	// | 4      |         | lsif-py | (overwrites (root) at commit 2)
+	// | 5      | root2/  | lsif-go | (overwrites root2/ at commit 2)
+	// | 6      | root1/  | lsif-go | (overwrites root1/ at commit 2)
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'root3/', 'completed', '', 50, 'lsif-go'),
-		(2, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'root4/', 'completed', '', 50, 'lsif-py'),
-		(3, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'root1/', 'completed', '', 50, 'lsif-go'),
-		(4, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'root2/', 'completed', '', 50, 'lsif-go'),
-		(5, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '', 'completed', '', 50, 'lsif-py'),
-		(6, 'cccccccccccccccccccccccccccccccccccccccc', 'root1/', 'completed', '', 50, 'lsif-go'),
-		(7, 'dddddddddddddddddddddddddddddddddddddddd', '', 'completed', '', 50, 'lsif-py'),
-		(8, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'root2/', 'completed', '', 50, 'lsif-go'),
-		(9, 'ffffffffffffffffffffffffffffffffffffffff', 'root1/', 'completed', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Exec(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(1), Root: "root3/"},
+		Upload{ID: 2, Commit: makeCommit(1), Root: "root4/", Indexer: "lsif-py"},
+		Upload{ID: 3, Commit: makeCommit(2), Root: "root1/"},
+		Upload{ID: 4, Commit: makeCommit(2), Root: "root2/"},
+		Upload{ID: 5, Commit: makeCommit(2), Root: "", Indexer: "lsif-py"},
+		Upload{ID: 6, Commit: makeCommit(3), Root: "root1/"},
+		Upload{ID: 7, Commit: makeCommit(4), Root: "", Indexer: "lsif-py"},
+		Upload{ID: 8, Commit: makeCommit(5), Root: "root2/"},
+		Upload{ID: 9, Commit: makeCommit(6), Root: "root1/"},
+	)
 
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
-		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'cccccccccccccccccccccccccccccccccccccccc'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
-		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		// TODO - exec, never query
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(2)},
+		makeCommit(4): {makeCommit(2)},
+		makeCommit(5): {makeCommit(3), makeCommit(4)},
+		makeCommit(6): {makeCommit(5)},
+	})
 
 	testCases := []struct {
 		commit      string
 		file        string
 		expectedIDs []int
 	}{
-		{commit: "dddddddddddddddddddddddddddddddddddddddd", file: "root1/file.ts", expectedIDs: []int{7, 3}},
-		{commit: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", file: "root2/file.ts", expectedIDs: []int{8, 7}},
-		{commit: "cccccccccccccccccccccccccccccccccccccccc", file: "root3/file.ts", expectedIDs: []int{5, 1}},
-		{commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", file: "root4/file.ts", expectedIDs: []int{2}},
-		{commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", file: "root4/file.ts", expectedIDs: []int{5}},
+		{commit: makeCommit(4), file: "root1/file.ts", expectedIDs: []int{7, 3}},
+		{commit: makeCommit(5), file: "root2/file.ts", expectedIDs: []int{8, 7}},
+		{commit: makeCommit(3), file: "root3/file.ts", expectedIDs: []int{5, 1}},
+		{commit: makeCommit(1), file: "root4/file.ts", expectedIDs: []int{2}},
+		{commit: makeCommit(2), file: "root4/file.ts", expectedIDs: []int{5}},
 	}
 
 	for _, testCase := range testCases {
@@ -425,29 +384,13 @@ func TestFindClosestDumpsMaxTraversalLimit(t *testing.T) {
 	//
 	// MAX_TRAVERSAL_LIMIT -- ... -- 2 -- 1 -- 0
 
-	var values []*sqlf.Query
+	commits := map[string][]string{}
 	for i := 0; i < MaxTraversalLimit; i++ {
-		v := sqlf.Sprintf(
-			"(50, %s, %s)",
-			fmt.Sprintf("%040d", i),
-			fmt.Sprintf("%040d", i+1),
-		)
-		values = append(values, v)
+		commits[makeCommit(i)] = []string{makeCommit(i + 1)}
 	}
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, state, tracing_context, repository_id, indexer) VALUES
-		(1, '0000000000000000000000000000000000000000', 'completed', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Exec(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
-
-	commitsQuery := sqlf.Sprintf(`INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES %s`, sqlf.Join(values, ", "))
-	if _, err := db.db.Query(commitsQuery.Query(sqlf.PostgresBindVar), commitsQuery.Args()...); err != nil {
-		// TODO - exec, never query
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, commits)
+	insertUploads(t, db.db, Upload{ID: 1, Commit: makeCommit(0)})
 
 	// (Assuming MAX_TRAVERSAL_LIMIT = 100)
 	// At commit `50`, the traversal limit will be reached before visiting commit `0`
@@ -470,10 +413,10 @@ func TestFindClosestDumpsMaxTraversalLimit(t *testing.T) {
 		file        string
 		expectedIDs []int
 	}{
-		{commit: "0000000000000000000000000000000000000000", file: "file.ts", expectedIDs: []int{1}},
-		{commit: "0000000000000000000000000000000000000001", file: "file.ts", expectedIDs: []int{1}},
-		{commit: fmt.Sprintf("%040d", MaxTraversalLimit/2-1), file: "file.ts", expectedIDs: []int{1}},
-		{commit: fmt.Sprintf("%040d", MaxTraversalLimit/2), file: "file.ts", expectedIDs: []int{}},
+		{commit: makeCommit(0), file: "file.ts", expectedIDs: []int{1}},
+		{commit: makeCommit(1), file: "file.ts", expectedIDs: []int{1}},
+		{commit: makeCommit(MaxTraversalLimit/2 - 1), file: "file.ts", expectedIDs: []int{1}},
+		{commit: makeCommit(MaxTraversalLimit / 2), file: "file.ts", expectedIDs: []int{}},
 	}
 
 	for _, testCase := range testCases {
@@ -531,16 +474,13 @@ func TestDoPrune(t *testing.T) {
 	t2 := t1.Add(time.Minute).UTC()
 	t3 := t1.Add(time.Minute * 2).UTC()
 	t4 := t1.Add(time.Minute * 3).UTC()
-	query := `
-		INSERT INTO lsif_uploads (id, commit, visible_at_tip, state, uploaded_at, tracing_context, repository_id, indexer) VALUES
-		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', false, 'completed', $1, '', 50, 'lsif-go'),
-		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', true,  'completed', $2, '', 50, 'lsif-go'),
-		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', false, 'completed', $3, '', 50, 'lsif-go'),
-		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', false, 'completed', $4, '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Query(query, t1, t2, t3, t4); err != nil {
-		t.Fatal(err)
-	}
+
+	insertUploads(t, db.db,
+		Upload{ID: 1, UploadedAt: t1},
+		Upload{ID: 2, UploadedAt: t2, VisibleAtTip: true},
+		Upload{ID: 3, UploadedAt: t3},
+		Upload{ID: 4, UploadedAt: t4},
+	)
 
 	// Prune oldest
 	if id, prunable, err := db.DoPrune(); err != nil {

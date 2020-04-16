@@ -6,10 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keegancsmith/sqlf"
 	"github.com/sourcegraph/sourcegraph/internal/db/dbconn"
 	"github.com/sourcegraph/sourcegraph/internal/db/dbtesting"
 )
+
+type printableRank struct{ value *int }
+
+func (r printableRank) String() string {
+	if r.value == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%d", r.value)
+}
 
 func TestGetUploadByID(t *testing.T) {
 	if testing.Short() {
@@ -27,23 +35,9 @@ func TestGetUploadByID(t *testing.T) {
 
 	t1 := time.Now().UTC()
 	t2 := t1.Add(time.Minute).UTC()
-	query := `
-		INSERT INTO lsif_uploads (
-			id, commit, root, visible_at_tip, uploaded_at, state,
-			failure_summary, failure_stacktrace, started_at, finished_at,
-			tracing_context, repository_id, indexer
-		) VALUES (
-			1, 'deadbeef01deadbeef02deadbeef03deadbeef04', 'sub/', true,
-			$1, 'processing', NULL, NULL, $2, NULL, '{"id": 42}', 50, 'lsif-go'
-		)
-	`
-	if _, err := db.db.Exec(query, t1, t2); err != nil {
-		t.Fatal(err)
-	}
-
 	expected := Upload{
 		ID:                1,
-		Commit:            "deadbeef01deadbeef02deadbeef03deadbeef04",
+		Commit:            makeCommit(1),
 		Root:              "sub/",
 		VisibleAtTip:      true,
 		UploadedAt:        t1,
@@ -53,10 +47,12 @@ func TestGetUploadByID(t *testing.T) {
 		StartedAt:         &t2,
 		FinishedAt:        nil,
 		TracingContext:    `{"id": 42}`,
-		RepositoryID:      50,
+		RepositoryID:      123,
 		Indexer:           "lsif-go",
 		Rank:              nil,
 	}
+
+	insertUploads(t, db.db, expected)
 
 	if upload, exists, err := db.GetUploadByID(1); err != nil {
 		t.Fatalf("unexpected error getting upload: %s", err)
@@ -74,31 +70,14 @@ func TestGetQueuedUploadRank(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	// Upload does not exist initially
-	if _, exists, err := db.GetUploadByID(1); err != nil {
-		t.Fatalf("unexpected error getting upload: %s", err)
-	} else if exists {
-		t.Fatal("unexpected record")
-	}
-
-	t1 := time.Now().UTC()
-	t2 := t1.Add(+time.Minute * 5).UTC()
-	t3 := t1.Add(+time.Minute * 3).UTC()
-	t4 := t1.Add(+time.Minute * 1).UTC()
-	t5 := t1.Add(+time.Minute * 4).UTC()
-	t6 := t1.Add(+time.Minute * 2).UTC()
-	query := `
-		INSERT INTO lsif_uploads (id, commit, uploaded_at, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', $1, 'queued', '{"id": 42}', 50, 'lsif-go'),
-		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', $2, 'queued', '{"id": 42}', 50, 'lsif-go'),
-		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', $3, 'queued', '{"id": 42}', 50, 'lsif-go'),
-		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', $4, 'queued', '{"id": 42}', 50, 'lsif-go'),
-		(5, 'deadbeef51deadbeef52deadbeef53deadbeef54', $5, 'queued', '{"id": 42}', 50, 'lsif-go'),
-		(6, 'deadbeef51deadbeef52deadbeef53deadbeef54', $6, 'processing', '{"id": 42}', 50, 'lsif-go')
-	`
-	if _, err := db.db.Exec(query, t1, t2, t3, t4, t5, t6); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, UploadedAt: time.Now().UTC(), State: "queued"},
+		Upload{ID: 2, UploadedAt: time.Now().UTC().Add(+time.Minute * 5).UTC(), State: "queued"},
+		Upload{ID: 3, UploadedAt: time.Now().UTC().Add(+time.Minute * 3).UTC(), State: "queued"},
+		Upload{ID: 4, UploadedAt: time.Now().UTC().Add(+time.Minute * 1).UTC(), State: "queued"},
+		Upload{ID: 5, UploadedAt: time.Now().UTC().Add(+time.Minute * 4).UTC(), State: "queued"},
+		Upload{ID: 6, UploadedAt: time.Now().UTC().Add(+time.Minute * 2).UTC(), State: "processing"},
+	)
 
 	if upload, _, _ := db.GetUploadByID(1); upload.Rank == nil || *upload.Rank != 1 {
 		t.Errorf("unexpected rank. want=%d have=%s", 1, printableRank{upload.Rank})
@@ -122,15 +101,6 @@ func TestGetQueuedUploadRank(t *testing.T) {
 	}
 }
 
-type printableRank struct{ value *int }
-
-func (r printableRank) String() string {
-	if r.value == nil {
-		return "nil"
-	}
-	return fmt.Sprintf("%d", r.value)
-}
-
 func TestGetUploadsByRepo(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -148,22 +118,20 @@ func TestGetUploadsByRepo(t *testing.T) {
 	t8 := t1.Add(-time.Minute * 7).UTC()
 	t9 := t1.Add(-time.Minute * 8).UTC()
 	t10 := t1.Add(-time.Minute * 9).UTC()
-	query := `
-		INSERT INTO lsif_uploads (id, commit, root, visible_at_tip, uploaded_at, state, failure_summary, tracing_context, repository_id, indexer) VALUES
-		(1, 'badbabe11badbabe12badbabe13badbabe14badb', 'sub1/', false, $1, 'queued', '', '{"id": 42}', 50, 'lsif-go'),
-		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', '', true, $2, 'errored', 'not a babe', '{"id": 42}', 50, 'lsif-tsc'),
-		(3, 'badbabe31badbabe32badbabe33badbabe34badb', 'sub2/', false, $3, 'queued', '', '{"id": 42}', 50, 'lsif-go'),
-		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', '', false, $4, 'queued', '', '{"id": 42}', 51, 'lsif-go'),
-		(5, 'badbabe51badbabe52badbabe53badbabe54badb', 'sub1/', true, $5, 'processing', '', '{"id": 42}', 50, 'lsif-tsc'),
-		(6, 'deadbeef51deadbeef52deadbeef53deadbeef54', 'sub2/', false, $6, 'processing', '', '{"id": 42}', 50, 'lsif-go'),
-		(7, 'deadbeef71deadbeef72deadbeef73deadbeef74', 'sub1/', true, $7, 'completed', '', '{"id": 42}', 50, 'lsif-tsc'),
-		(8, 'deadbeef81deadbeef82deadbeef83deadbeef84', '', true, $8, 'completed', '', '{"id": 42}', 50, 'lsif-tsc'),
-		(9, 'deadbeef91deadbeef92deadbeef93deadbeef94', '', false, $9, 'queued', '', '{"id": 42}', 50, 'lsif-go'),
-		(10, 'deadbeef91deadbeef02deadbeef03deadbeef04', 'sub1/', false, $10, 'completed', '', '{"id": 42}', 50, 'lsif-tsc')
-	`
-	if _, err := db.db.Exec(query, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10); err != nil {
-		t.Fatal(err)
-	}
+	failureSummary := "unlucky 333"
+
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(3331), UploadedAt: t1, Root: "sub1/", State: "queued"},
+		Upload{ID: 2, UploadedAt: t2, VisibleAtTip: true, State: "errored", FailureSummary: &failureSummary, Indexer: "lsif-tsc"},
+		Upload{ID: 3, Commit: makeCommit(3333), UploadedAt: t3, Root: "sub2/", State: "queued"},
+		Upload{ID: 4, UploadedAt: t4, State: "queued", RepositoryID: 51},
+		Upload{ID: 5, Commit: makeCommit(3333), UploadedAt: t5, Root: "sub1/", VisibleAtTip: true, State: "processing", Indexer: "lsif-tsc"},
+		Upload{ID: 6, UploadedAt: t6, Root: "sub2/", State: "processing"},
+		Upload{ID: 7, UploadedAt: t7, Root: "sub1/", VisibleAtTip: true, Indexer: "lsif-tsc"},
+		Upload{ID: 8, UploadedAt: t8, VisibleAtTip: true, Indexer: "lsif-tsc"},
+		Upload{ID: 9, UploadedAt: t9, State: "queued"},
+		Upload{ID: 10, UploadedAt: t10, Root: "sub1/", Indexer: "lsif-tsc"},
+	)
 
 	testCases := []struct {
 		state        string
@@ -174,8 +142,8 @@ func TestGetUploadsByRepo(t *testing.T) {
 		{expectedIDs: []int{1, 2, 3, 5, 6, 7, 8, 9, 10}},
 		{state: "completed", expectedIDs: []int{7, 8, 10}},
 		{term: "sub", expectedIDs: []int{1, 3, 5, 6, 7, 10}}, // searches root
-		{term: "badbabe", expectedIDs: []int{1, 3, 5}},       // searches commits
-		{term: "babe", expectedIDs: []int{1, 2, 3, 5}},       // searches commits and failure summary
+		{term: "003", expectedIDs: []int{1, 3, 5}},           // searches commits
+		{term: "333", expectedIDs: []int{1, 2, 3, 5}},        // searches commits and failure summary
 		{term: "tsc", expectedIDs: []int{2, 5, 7, 8, 10}},    // searches indexer
 		{visibleAtTip: true, expectedIDs: []int{2, 5, 7, 8}},
 	}
@@ -218,7 +186,7 @@ func TestEnqueue(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	id, closer, err := db.Enqueue("deadbeef01deadbeef02deadbeef03deadbeef04", "sub/", `{"id": 42}`, 50, "lsif-go")
+	id, closer, err := db.Enqueue(makeCommit(1), "sub/", `{"id": 42}`, 50, "lsif-go")
 	if err != nil {
 		t.Fatalf("unexpected error enqueueing upload: %s", err)
 	}
@@ -235,10 +203,10 @@ func TestEnqueue(t *testing.T) {
 
 	expected := Upload{
 		ID:                id,
-		Commit:            "deadbeef01deadbeef02deadbeef03deadbeef04",
+		Commit:            makeCommit(1),
 		Root:              "sub/",
 		VisibleAtTip:      false,
-		UploadedAt:        time.Now(),
+		UploadedAt:        time.Now().UTC(),
 		State:             "queued",
 		FailureSummary:    nil,
 		FailureStacktrace: nil,
@@ -272,7 +240,7 @@ func TestEnqueueRollback(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	id, closer, err := db.Enqueue("deadbeef01deadbeef02deadbeef03deadbeef04", "sub/", `{"id": 42}`, 50, "lsif-go")
+	id, closer, err := db.Enqueue(makeCommit(1), "sub/", `{"id": 42}`, 50, "lsif-go")
 	if err != nil {
 		t.Fatalf("unexpected error enqueueing upload: %s", err)
 	}
@@ -293,28 +261,22 @@ func TestGetStates(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	query := `
-		INSERT INTO lsif_uploads (id, commit, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'queued', '', 50, 'lsif-go'),
-		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', 'completed', '', 50, 'lsif-go'),
-		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', 'processing', '', 50, 'lsif-go'),
-		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', 'errored', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Query(query); err != nil {
-		t.Fatal(err)
-	}
-
-	states, err := db.GetStates([]int{1, 2, 4, 6})
-	if err != nil {
-		t.Fatalf("unexpected error getting states: %s", err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, State: "queued"},
+		Upload{ID: 2},
+		Upload{ID: 3, State: "processing"},
+		Upload{ID: 4, State: "errored"},
+	)
 
 	expected := map[int]string{
 		1: "queued",
 		2: "completed",
 		4: "errored",
 	}
-	if !reflect.DeepEqual(states, expected) {
+
+	if states, err := db.GetStates([]int{1, 2, 4, 6}); err != nil {
+		t.Fatalf("unexpected error getting states: %s", err)
+	} else if !reflect.DeepEqual(states, expected) {
 		t.Errorf("unexpected upload states. want=%v have=%v", expected, states)
 	}
 }
@@ -326,16 +288,9 @@ func TestDeleteUploadByID(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	query := `
-		INSERT INTO lsif_uploads (
-			id, commit, state, visible_at_tip, tracing_context, repository_id, indexer
-		) VALUES (
-			1, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'completed', false, '', 50, 'lsif-go'
-		)
-	`
-	if _, err := db.db.Query(query); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1},
+	)
 
 	var called bool
 	getTipCommit := func(repositoryID int) (string, error) {
@@ -343,14 +298,11 @@ func TestDeleteUploadByID(t *testing.T) {
 		return "", nil
 	}
 
-	found, err := db.DeleteUploadByID(1, getTipCommit)
-	if err != nil {
+	if found, err := db.DeleteUploadByID(1, getTipCommit); err != nil {
 		t.Fatalf("unexpected error deleting upload: %s", err)
-	}
-	if !found {
+	} else if !found {
 		t.Fatalf("expected record to exist")
-	}
-	if called {
+	} else if called {
 		t.Fatalf("unexpected call to getTipCommit")
 	}
 
@@ -373,11 +325,9 @@ func TestDeleteUploadByIDMissingRow(t *testing.T) {
 		return "", nil
 	}
 
-	found, err := db.DeleteUploadByID(1, getTipCommit)
-	if err != nil {
+	if found, err := db.DeleteUploadByID(1, getTipCommit); err != nil {
 		t.Fatalf("unexpected error deleting upload: %s", err)
-	}
-	if found {
+	} else if found {
 		t.Fatalf("unexpected record")
 	}
 }
@@ -389,130 +339,41 @@ func TestDeleteUploadByIDUpdatesVisibility(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, root, state, visible_at_tip, tracing_context, repository_id, indexer) VALUES
-		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'sub1/', 'completed', true, '', 50, 'lsif-go'),
-		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', 'sub2/', 'completed', true, '', 50, 'lsif-go'),
-		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', 'sub1/', 'completed', false, '', 50, 'lsif-go'),
-		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', 'sub2/', 'completed', false, '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Query(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(4), Root: "sub1/", VisibleAtTip: true},
+		Upload{ID: 2, Commit: makeCommit(3), Root: "sub2/", VisibleAtTip: true},
+		Upload{ID: 3, Commit: makeCommit(2), Root: "sub1/", VisibleAtTip: false},
+		Upload{ID: 4, Commit: makeCommit(1), Root: "sub2/", VisibleAtTip: false},
+	)
 
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'deadbeef41deadbeef42deadbeef43deadbeef44', NULL),
-		(50, 'deadbeef31deadbeef32deadbeef33deadbeef34', 'deadbeef41deadbeef42deadbeef43deadbeef44'),
-		(50, 'deadbeef21deadbeef22deadbeef23deadbeef24', 'deadbeef31deadbeef32deadbeef33deadbeef34'),
-		(50, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'deadbeef21deadbeef22deadbeef23deadbeef24')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(2)},
+		makeCommit(4): {makeCommit(3)},
+	})
 
 	var called bool
 	getTipCommit := func(repositoryID int) (string, error) {
 		called = true
-		return "deadbeef11deadbeef12deadbeef13deadbeef14", nil
+		return makeCommit(4), nil
 	}
 
-	found, err := db.DeleteUploadByID(1, getTipCommit)
-	if err != nil {
+	if found, err := db.DeleteUploadByID(1, getTipCommit); err != nil {
 		t.Fatalf("unexpected error deleting upload: %s", err)
-	}
-	if !found {
+	} else if !found {
 		t.Fatalf("expected record to exist")
-	}
-	if !called {
+	} else if !called {
 		t.Fatalf("expected call to getTipCommit")
 	}
 
-	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	visibility := map[int]bool{}
-	for rows.Next() {
-		var id int
-		var visibleAtTip bool
-		if err := rows.Scan(&id, &visibleAtTip); err != nil {
-			t.Fatal(err)
-		}
-
-		visibility[id] = visibleAtTip
+	expected := map[int]bool{
+		2: true,
+		3: true,
+		4: false,
 	}
 
-	expected := map[int]bool{2: true, 3: true, 4: false}
-	if !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
-	}
-}
-
-func TestUpdateDumpsVisibleFromTipOverlappingRoots(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	dbtesting.SetupGlobalTestDB(t)
-	db := &dbImpl{db: dbconn.Global}
-
-	// This database has the following commit graph:
-	//
-	// a -- b -- c -- d -- e -- f -- g
-
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'r1/', 'completed', '', 50, 'lsif-go'),
-		(2, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'r2/', 'completed', '', 50, 'lsif-go'),
-		(3, 'cccccccccccccccccccccccccccccccccccccccc', '', 'completed', '', 50, 'lsif-go'),
-		(4, 'dddddddddddddddddddddddddddddddddddddddd', 'r3/', 'completed', '', 50, 'lsif-go'),
-		(5, 'ffffffffffffffffffffffffffffffffffffffff', 'r4/', 'completed', '', 50, 'lsif-go'),
-		(6, 'gggggggggggggggggggggggggggggggggggggggg', 'r5/', 'completed', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Query(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
-
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
-		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'cccccccccccccccccccccccccccccccccccccccc'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
-		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
-		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'ffffffffffffffffffffffffffffffffffffffff')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		t.Fatal(err)
-	}
-
-	err := db.updateDumpsVisibleFromTip(nil, 50, "ffffffffffffffffffffffffffffffffffffffff")
-	if err != nil {
-		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
-	}
-
-	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	visibility := map[int]bool{}
-	for rows.Next() {
-		var id int
-		var visibleAtTip bool
-		if err := rows.Scan(&id, &visibleAtTip); err != nil {
-			t.Fatal(err)
-		}
-
-		visibility[id] = visibleAtTip
-	}
-
-	expected := map[int]bool{1: false, 2: false, 3: false, 4: true, 5: true, 6: false}
-	if !reflect.DeepEqual(visibility, expected) {
+	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
 	}
 }
@@ -526,62 +387,97 @@ func TestUpdateDumpsVisibleFromTipOverlappingRootsSameIndexer(t *testing.T) {
 
 	// This database has the following commit graph:
 	//
-	// a -- b --
+	// [1] -- [2] -- [3] -- [4] -- 5 -- [6] -- [7]
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'r1/', 'completed', '', 50, 'lsif-go'),
-		(2, 'cccccccccccccccccccccccccccccccccccccccc', 'r2/', 'completed', '', 50, 'lsif-go'),
-		(3, 'dddddddddddddddddddddddddddddddddddddddd', 'r1/', 'completed', '', 50, 'lsif-go'),
-		(4, 'ffffffffffffffffffffffffffffffffffffffff', 'r3/', 'completed', '', 50, 'lsif-go'),
-		(5, 'gggggggggggggggggggggggggggggggggggggggg', 'r4/', 'completed', '', 50, 'lsif-go'),
-		(6, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'r1/', 'completed', '', 50, 'lsif-tsc'),
-		(7, 'cccccccccccccccccccccccccccccccccccccccc', 'r2/', 'completed', '', 50, 'lsif-tsc'),
-		(8, 'dddddddddddddddddddddddddddddddddddddddd', '', 'completed', '', 50, 'lsif-tsc'),
-		(9, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'r3/', 'completed', '', 50, 'lsif-tsc')
-	`
-	if _, err := db.db.Query(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(1), Root: "r1/"},
+		Upload{ID: 2, Commit: makeCommit(2), Root: "r2/"},
+		Upload{ID: 3, Commit: makeCommit(3)},
+		Upload{ID: 4, Commit: makeCommit(4), Root: "r3/"},
+		Upload{ID: 5, Commit: makeCommit(6), Root: "r4/"},
+		Upload{ID: 6, Commit: makeCommit(7), Root: "r5/"},
+	)
 
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
-		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'cccccccccccccccccccccccccccccccccccccccc'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
-		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
-		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'ffffffffffffffffffffffffffffffffffffffff')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(2)},
+		makeCommit(4): {makeCommit(3)},
+		makeCommit(5): {makeCommit(4)},
+		makeCommit(6): {makeCommit(5)},
+		makeCommit(7): {makeCommit(6)},
+	})
 
-	err := db.updateDumpsVisibleFromTip(nil, 50, "ffffffffffffffffffffffffffffffffffffffff")
+	err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(6))
 	if err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	}
 
-	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
+	expected := map[int]bool{
+		1: false,
+		2: false,
+		3: false,
+		4: true,
+		5: true,
+		6: false,
+	}
+
+	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	}
+}
+
+func TestUpdateDumpsVisibleFromTipOverlappingRoots(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	dbtesting.SetupGlobalTestDB(t)
+	db := &dbImpl{db: dbconn.Global}
+
+	// This database has the following commit graph:
+	//
+	// [1] -- 2 -- [3] -- [4] -- [5] -- [6] -- [7]
+
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(1), Root: "r1/"},
+		Upload{ID: 2, Commit: makeCommit(3), Root: "r2/"},
+		Upload{ID: 3, Commit: makeCommit(4), Root: "r1/"},
+		Upload{ID: 4, Commit: makeCommit(6), Root: "r3/"},
+		Upload{ID: 5, Commit: makeCommit(7), Root: "r4/"},
+		Upload{ID: 6, Commit: makeCommit(1), Root: "r1/", Indexer: "lsif-tsc"},
+		Upload{ID: 7, Commit: makeCommit(3), Root: "r2/", Indexer: "lsif-tsc"},
+		Upload{ID: 8, Commit: makeCommit(4), Indexer: "lsif-tsc"},
+		Upload{ID: 9, Commit: makeCommit(5), Root: "r3/", Indexer: "lsif-tsc"},
+	)
+
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(2)},
+		makeCommit(4): {makeCommit(3)},
+		makeCommit(5): {makeCommit(4)},
+		makeCommit(6): {makeCommit(5)},
+		makeCommit(7): {makeCommit(6)},
+	})
+
+	err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(6))
 	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	visibility := map[int]bool{}
-	for rows.Next() {
-		var id int
-		var visibleAtTip bool
-		if err := rows.Scan(&id, &visibleAtTip); err != nil {
-			t.Fatal(err)
-		}
-
-		visibility[id] = visibleAtTip
+		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	}
 
-	expected := map[int]bool{1: false, 2: true, 3: true, 4: true, 5: false, 6: false, 7: false, 8: false, 9: true}
-	if !reflect.DeepEqual(visibility, expected) {
+	expected := map[int]bool{
+		1: false,
+		2: true,
+		3: true,
+		4: true,
+		5: false,
+		6: false,
+		7: false,
+		8: false,
+		9: true,
+	}
+
+	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
 	}
 }
@@ -595,68 +491,50 @@ func TestUpdateDumpsVisibleFromTipBranchingPaths(t *testing.T) {
 
 	// This database has the following commit graph:
 	//
-	// a --+-- [b] --- c ---+
+	// 1 --+-- [2] --- 3 ---+
 	//     |                |
-	//     +--- d --- [e] --+ -- [h] --+-- [i]
+	//     +--- 4 --- [5] --+ -- [8] --+-- [9]
 	//     |                           |
-	//     +-- [f] --- g --------------+
+	//     +-- [6] --- 7 --------------+
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, root, state, tracing_context, repository_id, indexer) VALUES
-		(1, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'r2/', 'completed', '', 50, 'lsif-go'),
-		(2, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'r2/a/', 'completed', '', 50, 'lsif-go'),
-		(3, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'r2/b/', 'completed', '', 50, 'lsif-go'),
-		(4, 'ffffffffffffffffffffffffffffffffffffffff', 'r1/a/', 'completed', '', 50, 'lsif-go'),
-		(5, 'ffffffffffffffffffffffffffffffffffffffff', 'r1/b/', 'completed', '', 50, 'lsif-go'),
-		(6, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'r1/', 'completed', '', 50, 'lsif-go'),
-		(7, 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii', 'r3/', 'completed', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Query(uploadsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertUploads(t, db.db,
+		Upload{ID: 1, Commit: makeCommit(2), Root: "r2/"},
+		Upload{ID: 2, Commit: makeCommit(5), Root: "r2/a/"},
+		Upload{ID: 3, Commit: makeCommit(5), Root: "r2/b/"},
+		Upload{ID: 4, Commit: makeCommit(6), Root: "r1/a/"},
+		Upload{ID: 5, Commit: makeCommit(6), Root: "r1/b/"},
+		Upload{ID: 6, Commit: makeCommit(8), Root: "r1/"},
+		Upload{ID: 7, Commit: makeCommit(9), Root: "r3/"},
+	)
 
-	commitsQuery := `
-		INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES
-		(50, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL),
-		(50, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'cccccccccccccccccccccccccccccccccccccccc', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
-		(50, 'dddddddddddddddddddddddddddddddddddddddd', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'dddddddddddddddddddddddddddddddddddddddd'),
-		(50, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'),
-		(50, 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'cccccccccccccccccccccccccccccccccccccccc'),
-		(50, 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii', 'gggggggggggggggggggggggggggggggggggggggg'),
-		(50, 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii', 'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh'),
-		(50, 'ffffffffffffffffffffffffffffffffffffffff', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-		(50, 'gggggggggggggggggggggggggggggggggggggggg', 'ffffffffffffffffffffffffffffffffffffffff')
-	`
-	if _, err := db.db.Query(commitsQuery); err != nil {
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, map[string][]string{
+		makeCommit(1): {},
+		makeCommit(2): {makeCommit(1)},
+		makeCommit(3): {makeCommit(2)},
+		makeCommit(4): {makeCommit(1)},
+		makeCommit(5): {makeCommit(4)},
+		makeCommit(8): {makeCommit(5), makeCommit(3)},
+		makeCommit(9): {makeCommit(7), makeCommit(8)},
+		makeCommit(6): {makeCommit(1)},
+		makeCommit(7): {makeCommit(6)},
+	})
 
-	err := db.updateDumpsVisibleFromTip(nil, 50, "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii")
+	err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(9))
 	if err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	}
 
-	rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	visibility := map[int]bool{}
-	for rows.Next() {
-		var id int
-		var visibleAtTip bool
-		if err := rows.Scan(&id, &visibleAtTip); err != nil {
-			t.Fatal(err)
-		}
-
-		visibility[id] = visibleAtTip
+	expected := map[int]bool{
+		1: false,
+		2: true,
+		3: true,
+		4: false,
+		5: false,
+		6: true,
+		7: true,
 	}
 
-	expected := map[int]bool{1: false, 2: true, 3: true, 4: false, 5: false, 6: true, 7: true}
-	if !reflect.DeepEqual(visibility, expected) {
+	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
 	}
 }
@@ -672,78 +550,29 @@ func TestUpdateDumpsVisibleFromTipMaxTraversalLimit(t *testing.T) {
 	//
 	// (MAX_TRAVERSAL_LIMIT + 1) -- ... -- 2 -- 1 -- 0
 
-	var values []*sqlf.Query
+	commits := map[string][]string{}
 	for i := 0; i < MaxTraversalLimit+1; i++ {
-		v := sqlf.Sprintf(
-			"(50, %s, %s)",
-			fmt.Sprintf("%040d", i),
-			fmt.Sprintf("%040d", i+1),
-		)
-		values = append(values, v)
+		commits[makeCommit(i)] = []string{makeCommit(i + 1)}
 	}
 
-	uploadsQuery := `
-		INSERT INTO lsif_uploads (id, commit, state, tracing_context, repository_id, indexer) VALUES
-		(1, $1, 'completed', '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Exec(uploadsQuery, fmt.Sprintf("%040d", MaxTraversalLimit)); err != nil {
-		t.Fatal(err)
-	}
+	insertCommits(t, db.db, commits)
+	insertUploads(t, db.db, Upload{ID: 1, Commit: fmt.Sprintf("%040d", MaxTraversalLimit)})
 
-	commitsQuery := sqlf.Sprintf(`INSERT INTO lsif_commits (repository_id, commit, parent_commit) VALUES %s`, sqlf.Join(values, ", "))
-	if _, err := db.db.Query(commitsQuery.Query(sqlf.PostgresBindVar), commitsQuery.Args()...); err != nil {
-		// TODO - exec, never query
-		t.Fatal(err)
-	}
-
-	getVisible := func() map[int]bool {
-		rows, err := db.db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer rows.Close()
-
-		visibility := map[int]bool{}
-		for rows.Next() {
-			var id int
-			var visibleAtTip bool
-			if err := rows.Scan(&id, &visibleAtTip); err != nil {
-				t.Fatal(err)
-			}
-
-			visibility[id] = visibleAtTip
-		}
-
-		return visibility
-	}
-
-	if err := db.updateDumpsVisibleFromTip(nil, 50, fmt.Sprintf("%040d", MaxTraversalLimit)); err != nil {
+	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(MaxTraversalLimit)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
-	}
-
-	visibility := getVisible()
-	expected := map[int]bool{1: true}
-	if !reflect.DeepEqual(visibility, expected) {
+	} else if visibility, expected := getDumpVisibility(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibility, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
 	}
 
-	if err := db.updateDumpsVisibleFromTip(nil, 50, fmt.Sprintf("%040d", 1)); err != nil {
+	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(1)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
-	}
-
-	visibility = getVisible()
-	expected = map[int]bool{1: true}
-	if !reflect.DeepEqual(visibility, expected) {
+	} else if visibility, expected := getDumpVisibility(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibility, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
 	}
 
-	if err := db.updateDumpsVisibleFromTip(nil, 50, fmt.Sprintf("%040d", 0)); err != nil {
+	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(0)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
-	}
-
-	visibility = getVisible()
-	expected = map[int]bool{1: false}
-	if !reflect.DeepEqual(visibility, expected) {
+	} else if visibility, expected := getDumpVisibility(t, db.db), map[int]bool{1: false}; !reflect.DeepEqual(visibility, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
 	}
 }
@@ -755,39 +584,37 @@ func TestResetStalled(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	t1 := time.Now().Add(-time.Second * 6) // old
-	t2 := time.Now().Add(-time.Second * 2) // new enough
-	t3 := time.Now().Add(-time.Second * 3) // new enough
-	t4 := time.Now().Add(-time.Second * 8) // old
-	t5 := time.Now().Add(-time.Second * 8) // old
-	query := `
-		INSERT INTO lsif_uploads (id, commit, state, started_at, tracing_context, repository_id, indexer) VALUES
-		(1, 'deadbeef11deadbeef12deadbeef13deadbeef14', 'processing', $1, '', 50, 'lsif-go'),
-		(2, 'deadbeef21deadbeef22deadbeef23deadbeef24', 'processing', $2, '', 50, 'lsif-go'),
-		(3, 'deadbeef31deadbeef32deadbeef33deadbeef34', 'processing', $3, '', 50, 'lsif-go'),
-		(4, 'deadbeef41deadbeef42deadbeef43deadbeef44', 'processing', $4, '', 50, 'lsif-go'),
-		(5, 'deadbeef41deadbeef52deadbeef53deadbeef54', 'processing', $5, '', 50, 'lsif-go')
-	`
-	if _, err := db.db.Query(query, t1, t2, t3, t4, t5); err != nil {
+	t1 := time.Now().UTC().Add(-time.Second * 6) // old
+	t2 := time.Now().UTC().Add(-time.Second * 2) // new enough
+	t3 := time.Now().UTC().Add(-time.Second * 3) // new enough
+	t4 := time.Now().UTC().Add(-time.Second * 8) // old
+	t5 := time.Now().UTC().Add(-time.Second * 8) // old
+
+	insertUploads(t, db.db,
+		Upload{ID: 1, State: "processing", StartedAt: &t1},
+		Upload{ID: 2, State: "processing", StartedAt: &t2},
+		Upload{ID: 3, State: "processing", StartedAt: &t3},
+		Upload{ID: 4, State: "processing", StartedAt: &t4},
+		Upload{ID: 5, State: "processing", StartedAt: &t5},
+	)
+
+	tx, err := db.db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	// Row lock upload 5 in a transaction which should be skipped by ResetStalled
+	if _, err := tx.Query(`SELECT * FROM lsif_uploads WHERE id = 5 FOR UPDATE`); err != nil {
 		t.Fatal(err)
 	}
 
-	//
-	// Lock upload 5 in a transaction that is skipped by reset stalled
-
-	if tx, err := db.db.Begin(); err != nil {
-		t.Fatal(err)
-	} else if _, err := tx.Query(`SELECT * FROM lsif_uploads WHERE id = 5 FOR UPDATE`); err != nil {
-		t.Fatal(err)
-	}
+	expected := []int{1, 4}
 
 	ids, err := db.ResetStalled()
 	if err != nil {
 		t.Fatalf("unexpected error resetting stalled uploads: %s", err)
-	}
-
-	expected := []int{1, 4}
-	if !reflect.DeepEqual(ids, expected) {
+	} else if !reflect.DeepEqual(ids, expected) {
 		t.Errorf("unexpected ids. want=%v have=%v", expected, ids)
 	}
 }
