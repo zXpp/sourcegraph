@@ -41,10 +41,9 @@ func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 			u.tracing_context,
 			u.repository_id,
 			u.indexer
-		FROM lsif_uploads u WHERE id = %d
+		FROM lsif_dumps u WHERE id = %d
 	`
 
-	// TODO - should ensure state as well?
 	dump, err := scanDump(db.queryRow(context.Background(), sqlf.Sprintf(query, id)))
 	if err != nil {
 		return Dump{}, false, ignoreNoRows(err)
@@ -54,13 +53,21 @@ func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 }
 
 func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error) {
+	tw, err := db.beginTx(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = closeTx(tw.tx, err)
+	}()
+
 	visibleIDsQuery := `
 		SELECT d.dump_id FROM lineage_with_dumps d
 		WHERE %s LIKE (d.root || '%%%%') AND d.dump_id IN (SELECT * FROM visible_ids)
 		ORDER BY d.n
 	`
 
-	ids, err := scanInts(db.query(context.Background(), withBidirectionalLineage(visibleIDsQuery, repositoryID, commit, file)))
+	ids, err := scanInts(tw.query(context.Background(), withBidirectionalLineage(visibleIDsQuery, repositoryID, commit, file)))
 	if err != nil {
 		return nil, err
 	}
@@ -85,25 +92,38 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 			u.tracing_context,
 			u.repository_id,
 			u.indexer
-		FROM lsif_uploads u WHERE id IN (%s)
+		FROM lsif_dumps u WHERE id IN (%s)
 	`
 
-	// TODO - transaction
-	dumps, err := scanDumps(db.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
+	dumps, err := scanDumps(tw.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
 	if err != nil {
 		return nil, err
 	}
 
-	return dumps, nil
+	return deduplicateDumps(dumps), nil
+
 }
 
-// TODO - rename
-func (db *dbImpl) DoPrune() (int, bool, error) {
+func deduplicateDumps(allDumps []Dump) (dumps []Dump) {
+	dumpIDs := map[int]struct{}{}
+	for _, dump := range allDumps {
+		if _, ok := dumpIDs[dump.ID]; ok {
+			continue
+		}
+
+		dumpIDs[dump.ID] = struct{}{}
+		dumps = append(dumps, dump)
+	}
+
+	return dumps
+}
+
+func (db *dbImpl) DeleteOldestDump() (int, bool, error) {
 	// TODO - should only be completed (all methods in this file)
 	query := `
 		DELETE FROM lsif_uploads
 		WHERE ctid IN (
-			SELECT ctid FROM lsif_uploads
+			SELECT ctid FROM lsif_dumps
 			WHERE visible_at_tip = false
 			ORDER BY uploaded_at
 			LIMIT 1

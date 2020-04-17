@@ -18,7 +18,7 @@ type DB interface {
 
 	GetDumpByID(id int) (Dump, bool, error)
 	FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error)
-	DoPrune() (int, bool, error)
+	DeleteOldestDump() (int, bool, error)
 
 	GetPackage(scheme, name, version string) (Dump, bool, error)
 	SameRepoPager(repositoryID int, commit, scheme, name, version string, limit int) (int, *ReferencePager, error)

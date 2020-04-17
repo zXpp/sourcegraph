@@ -40,7 +40,6 @@ func scanDumps(rows *sql.Rows, err error) ([]Dump, error) {
 			return nil, err
 		}
 
-		// TODO - need to de-duplicate
 		dumps = append(dumps, dump)
 	}
 

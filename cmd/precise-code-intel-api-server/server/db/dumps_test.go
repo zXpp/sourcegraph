@@ -281,7 +281,7 @@ func TestFindClosestDumpsMaxTraversalLimit(t *testing.T) {
 	})
 }
 
-func TestDoPrune(t *testing.T) {
+func TestDeleteOldestDump(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
@@ -289,7 +289,7 @@ func TestDoPrune(t *testing.T) {
 	db := &dbImpl{db: dbconn.Global}
 
 	// Cannot prune empty dump set
-	if _, prunable, err := db.DoPrune(); err != nil {
+	if _, prunable, err := db.DeleteOldestDump(); err != nil {
 		t.Fatalf("unexpected error pruning dumps: %s", err)
 	} else if prunable {
 		t.Fatal("unexpectedly prunable")
@@ -308,7 +308,7 @@ func TestDoPrune(t *testing.T) {
 	)
 
 	// Prune oldest
-	if id, prunable, err := db.DoPrune(); err != nil {
+	if id, prunable, err := db.DeleteOldestDump(); err != nil {
 		t.Fatalf("unexpected error pruning dumps: %s", err)
 	} else if !prunable {
 		t.Fatal("unexpectedly non-prunable")
@@ -317,7 +317,7 @@ func TestDoPrune(t *testing.T) {
 	}
 
 	// Prune next oldest (skips visible at tip)
-	if id, prunable, err := db.DoPrune(); err != nil {
+	if id, prunable, err := db.DeleteOldestDump(); err != nil {
 		t.Fatalf("unexpected error pruning dumps: %s", err)
 	} else if !prunable {
 		t.Fatal("unexpectedly non-prunable")

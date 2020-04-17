@@ -63,25 +63,49 @@ func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
 	return upload, true, nil
 }
 
-// TODO - do this transactionally
 // TODO - rewrite this logic to be nicer
-func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) ([]Upload, int, error) {
-	conds := []*sqlf.Query{
-		sqlf.Sprintf("u.repository_id = %s", repositoryID),
+func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) (_ []Upload, _ int, err error) {
+	tw, err := db.beginTx(context.Background())
+	if err != nil {
+		return nil, 0, err
 	}
+	defer func() {
+		err = closeTx(tw.tx, err)
+	}()
+
+	searchableFields := []string{
+		"commit",
+		"root",
+		"indexer",
+		"failure_summary",
+		"failure_stacktrace",
+	}
+
+	var conds []*sqlf.Query
+	conds = append(conds, sqlf.Sprintf("u.repository_id = %s", repositoryID))
 	if state != "" {
 		conds = append(conds, sqlf.Sprintf("state = %s", state))
 	}
+	if visibleAtTip {
+		conds = append(conds, sqlf.Sprintf("visible_at_tip = true"))
+	}
 	if term != "" {
 		var termConds []*sqlf.Query
-		for _, column := range []string{"commit", "root", "indexer", "failure_summary", "failure_stacktrace"} {
+		for _, column := range searchableFields {
 			termConds = append(termConds, sqlf.Sprintf(column+" LIKE %s", "%"+term+"%"))
 		}
 
 		conds = append(conds, sqlf.Sprintf("(%s)", sqlf.Join(termConds, " OR ")))
 	}
-	if visibleAtTip {
-		conds = append(conds, sqlf.Sprintf("visible_at_tip = true"))
+
+	countQuery := `
+		SELECT COUNT(1) FROM lsif_uploads u
+		WHERE %s
+	`
+
+	count, err := scanInt(tw.queryRow(context.Background(), sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
+	if err != nil {
+		return nil, 0, err
 	}
 
 	query := `
@@ -111,17 +135,7 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 		ORDER BY uploaded_at DESC LIMIT %d OFFSET %d
 	`
 
-	uploads, err := scanUploads(db.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
-	if err != nil {
-		return nil, 0, err
-	}
-
-	countQuery := `
-		SELECT COUNT(1) FROM lsif_uploads u
-		WHERE %s
-	`
-
-	count, err := scanInt(db.queryRow(context.Background(), sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
+	uploads, err := scanUploads(tw.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
 	if err != nil {
 		return nil, 0, err
 	}
