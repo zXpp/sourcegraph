@@ -37,19 +37,18 @@ func TestTestTypeScriptGeneratedBloomFilters(t *testing.T) {
 		name := fmt.Sprintf("filter=%s", testCase.filterFile)
 
 		t.Run(name, func(t *testing.T) {
-			buckets, m, k, err := decodeFilter(readTestFilter(t, testCase.filterFile))
-			if err != nil {
-				t.Fatalf("unexpected error decoding filter: %s", err)
-			}
-
 			for _, v := range readTestWords(t, testCase.includeFile) {
-				if !test(v, buckets, m, k) {
+				if exists, err := decodeAndTestFilter(readTestFilter(t, testCase.filterFile), v); err != nil {
+					t.Fatalf("unexpected error decoding filter: %s", err)
+				} else if !exists {
 					t.Errorf("expected %s to be in bloom filter", v)
 				}
 			}
 
 			for _, v := range readTestWords(t, testCase.excludeFile) {
-				if test(v, buckets, m, k) {
+				if exists, err := decodeAndTestFilter(readTestFilter(t, testCase.filterFile), v); err != nil {
+					t.Fatalf("unexpected error decoding filter: %s", err)
+				} else if exists {
 					t.Errorf("expected %s not to be in bloom filter", v)
 				}
 			}
