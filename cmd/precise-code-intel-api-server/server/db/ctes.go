@@ -6,8 +6,16 @@ import (
 	"github.com/keegancsmith/sqlf"
 )
 
+// MaxTraversalLimit is the maximum size of the CTE result set when traversing commit ancestor
+// and descendants. This value affects how stale an upload can be while still serving code
+// intelligence for a nearby commit.
 const MaxTraversalLimit = 100
 
+// visibleIDsCTE defines a CTE `visible_ids` that returns an ordered list of dump identifiers
+// given a previously defined CTE `lineage`. The dump identifiers returned exclude the dumps
+// shadowed by another dump: one dump shadows another when it has the same indexer value, has
+// a root value enclosing the other, and when it is at a commit closer to the target commit
+// value.
 var visibleIDsCTE = `
 	-- Limit the visibility to the maximum traversal depth and approximate
 	-- each commit's depth by its row number.
@@ -34,6 +42,8 @@ var visibleIDsCTE = `
 	)
 `
 
+// withAncestorLineage prepares the given query by defining the CTE `visible_ids`. The set of
+// candidate dumps are chosen by tracing the commit graph backwards (towards ancestors).
 func withAncestorLineage(query string, repositoryID int, commit string, args ...interface{}) *sqlf.Query {
 	queryWithCTEs := `
 		WITH
@@ -46,6 +56,10 @@ func withAncestorLineage(query string, repositoryID int, commit string, args ...
 	return sqlf.Sprintf(queryWithCTEs, append([]interface{}{repositoryID, commit}, args...)...)
 }
 
+// withBidirectionalLineage prepares the given query by defining the CTE `visible_ids`. The set of
+// candidatedumps are chosen by tracing the commit graph both forwards and backwards. The resulting
+// order of dumps are interleaved such that two dumps with a similar "distance" are near eachother
+// in the result set. This prevents the resulting dumps from preferring one direction over the other.
 func withBidirectionalLineage(query string, repositoryID int, commit string, args ...interface{}) *sqlf.Query {
 	queryWithCTEs := `
 		WITH

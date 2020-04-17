@@ -101,6 +101,8 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 
 }
 
+// deduplicateDumps returns a copy of the given slice of dumps with duplicate identifiers removed.
+// The first dump with a unique identifier is retained.
 func deduplicateDumps(allDumps []Dump) (dumps []Dump) {
 	dumpIDs := map[int]struct{}{}
 	for _, dump := range allDumps {
@@ -134,6 +136,7 @@ func (db *dbImpl) DeleteOldestDump() (int, bool, error) {
 	return id, true, nil
 }
 
+// updateDumpsVisibleFromTip recalculates the visible_at_tip flag of all dumps of the given repository.
 func (db *dbImpl) updateDumpsVisibleFromTip(tw *transactionWrapper, repositoryID int, tipCommit string) (err error) {
 	if tw == nil {
 		tw, err = db.beginTx(context.Background())

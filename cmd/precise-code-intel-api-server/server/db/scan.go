@@ -4,10 +4,13 @@ import (
 	"database/sql"
 )
 
+// Scanner is the common interface shared by *sql.Row and *sql.Rows.
 type Scanner interface {
-	Scan(targets ...interface{}) error
+	// Scan copies the values of the current row into the values pointed at by dest.
+	Scan(dest ...interface{}) error
 }
 
+// scanDump populates a Dump value from the given scanner.
 func scanDump(scanner Scanner) (dump Dump, err error) {
 	err = scanner.Scan(
 		&dump.ID,
@@ -27,6 +30,8 @@ func scanDump(scanner Scanner) (dump Dump, err error) {
 	return
 }
 
+// scanDumps reads the given set of dump rows and returns a slice of resulting values.
+// This method should be called directly with the return value of `*db.queryRows`.
 func scanDumps(rows *sql.Rows, err error) ([]Dump, error) {
 	if err != nil {
 		return nil, err
@@ -46,6 +51,7 @@ func scanDumps(rows *sql.Rows, err error) ([]Dump, error) {
 	return dumps, nil
 }
 
+// scanUpload populates an Upload value from the given scanner.
 func scanUpload(scanner Scanner) (upload Upload, err error) {
 	err = scanner.Scan(
 		&upload.ID,
@@ -66,6 +72,8 @@ func scanUpload(scanner Scanner) (upload Upload, err error) {
 	return
 }
 
+// scanUploads reads the given set of upload rows and returns a slice of resulting
+// values. This method should be called directly with the return value of `*db.queryRows`.
 func scanUploads(rows *sql.Rows, err error) ([]Upload, error) {
 	if err != nil {
 		return nil, err
@@ -85,11 +93,14 @@ func scanUploads(rows *sql.Rows, err error) ([]Upload, error) {
 	return uploads, nil
 }
 
+// scanReference populates a Reference value from the given scanner.
 func scanReference(scanner Scanner) (reference Reference, err error) {
 	err = scanner.Scan(&reference.DumpID, &reference.Filter)
 	return
 }
 
+// scanReferences reads the given set of reference rows and returns a slice of resulting
+// values. This method should be called directly with the return value of `*db.queryRows`.
 func scanReferences(rows *sql.Rows, err error) ([]Reference, error) {
 	if err != nil {
 		return nil, err
@@ -109,11 +120,14 @@ func scanReferences(rows *sql.Rows, err error) ([]Reference, error) {
 	return references, nil
 }
 
+// scanInt populates an integer value from the given scanner.
 func scanInt(scanner Scanner) (value int, err error) {
 	err = scanner.Scan(&value)
 	return
 }
 
+// scanInts reads the given set of `(int)` rows and returns a slice of resulting values.
+// This method should be called directly with the return value of `*db.queryRows`.
 func scanInts(rows *sql.Rows, err error) ([]int, error) {
 	if err != nil {
 		return nil, err
@@ -133,11 +147,14 @@ func scanInts(rows *sql.Rows, err error) ([]int, error) {
 	return values, nil
 }
 
+// scanState populates an integer and string from the given scanner.
 func scanState(scanner Scanner) (repositoryID int, state string, err error) {
 	err = scanner.Scan(&repositoryID, &state)
 	return
 }
 
+// scanStates reads the given set of `(id, state)` rows and returns a map from id to its
+// state. This method should be called directly with the return value of `*db.queryRows`.
 func scanStates(rows *sql.Rows, err error) (map[int]string, error) {
 	if err != nil {
 		return nil, err
@@ -157,11 +174,15 @@ func scanStates(rows *sql.Rows, err error) (map[int]string, error) {
 	return states, nil
 }
 
+// scanVisibility populates an integer and boolean from the given scanner.
 func scanVisibility(scanner Scanner) (repositoryID int, visibleAtTip bool, err error) {
 	err = scanner.Scan(&repositoryID, &visibleAtTip)
 	return
 }
 
+// scanVisibilities reads the given set of `(id, visible_at_tip)` rows and returns a map
+// from id to its visibility. This method should be called directly with the return value
+// of `*db.queryRows`.
 func scanVisibilities(rows *sql.Rows, err error) (map[int]bool, error) {
 	if err != nil {
 		return nil, err

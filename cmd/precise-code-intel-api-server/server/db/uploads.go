@@ -7,6 +7,10 @@ import (
 	"github.com/keegancsmith/sqlf"
 )
 
+// StalledUploadMaxAge is the maximum allowable duration between updating the state of an
+// upload as "processing" and locking the upload row during processing. An unlocked row that
+// is marked as processing likely indicates that the worker that dequeued the upload has died.
+// There should be a nearly-zero delay between these states during normal operation.
 const StalledUploadMaxAge = time.Second * 5
 
 type Upload struct {
@@ -122,8 +126,9 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 	return uploads, count, nil
 }
 
+// makeSearchCondition returns a disjunction of LIKE clauses against all searchable columns of an upload.
 func makeSearchCondition(term string) *sqlf.Query {
-	searchableFields := []string{
+	searchableColumns := []string{
 		"commit",
 		"root",
 		"indexer",
@@ -132,7 +137,7 @@ func makeSearchCondition(term string) *sqlf.Query {
 	}
 
 	var termConds []*sqlf.Query
-	for _, column := range searchableFields {
+	for _, column := range searchableColumns {
 		termConds = append(termConds, sqlf.Sprintf("u."+column+" LIKE %s", "%"+term+"%"))
 	}
 
