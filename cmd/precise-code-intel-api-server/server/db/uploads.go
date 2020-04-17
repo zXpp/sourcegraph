@@ -24,8 +24,6 @@ type Upload struct {
 	RepositoryID      int        `json:"repositoryId"`
 	Indexer           string     `json:"indexer"`
 	Rank              *int       `json:"placeInQueue"`
-	// TODO - add this as an optional field
-	// ProcessedAt       time.Time  `json:"processedAt"`
 }
 
 func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
@@ -57,13 +55,12 @@ func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
 
 	upload, err := scanUpload(db.queryRow(context.Background(), sqlf.Sprintf(query, id)))
 	if err != nil {
-		return Upload{}, false, ignoreNoRows(err)
+		return Upload{}, false, ignoreErrNoRows(err)
 	}
 
 	return upload, true, nil
 }
 
-// TODO - rewrite this logic to be nicer
 func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) (_ []Upload, _ int, err error) {
 	tw, err := db.beginTx(context.Background())
 	if err != nil {
@@ -73,36 +70,19 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 		err = closeTx(tw.tx, err)
 	}()
 
-	searchableFields := []string{
-		"commit",
-		"root",
-		"indexer",
-		"failure_summary",
-		"failure_stacktrace",
-	}
-
 	var conds []*sqlf.Query
 	conds = append(conds, sqlf.Sprintf("u.repository_id = %s", repositoryID))
 	if state != "" {
-		conds = append(conds, sqlf.Sprintf("state = %s", state))
-	}
-	if visibleAtTip {
-		conds = append(conds, sqlf.Sprintf("visible_at_tip = true"))
+		conds = append(conds, sqlf.Sprintf("u.state = %s", state))
 	}
 	if term != "" {
-		var termConds []*sqlf.Query
-		for _, column := range searchableFields {
-			termConds = append(termConds, sqlf.Sprintf(column+" LIKE %s", "%"+term+"%"))
-		}
-
-		conds = append(conds, sqlf.Sprintf("(%s)", sqlf.Join(termConds, " OR ")))
+		conds = append(conds, makeSearchCondition(term))
+	}
+	if visibleAtTip {
+		conds = append(conds, sqlf.Sprintf("u.visible_at_tip = true"))
 	}
 
-	countQuery := `
-		SELECT COUNT(1) FROM lsif_uploads u
-		WHERE %s
-	`
-
+	countQuery := `SELECT COUNT(1) FROM lsif_uploads u WHERE %s`
 	count, err := scanInt(tw.queryRow(context.Background(), sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
 	if err != nil {
 		return nil, 0, err
@@ -131,8 +111,7 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 			WHERE r.state = 'queued'
 		) s
 		ON u.id = s.id
-		WHERE %s
-		ORDER BY uploaded_at DESC LIMIT %d OFFSET %d
+		WHERE %s ORDER BY uploaded_at DESC LIMIT %d OFFSET %d
 	`
 
 	uploads, err := scanUploads(tw.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
@@ -141,6 +120,23 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 	}
 
 	return uploads, count, nil
+}
+
+func makeSearchCondition(term string) *sqlf.Query {
+	searchableFields := []string{
+		"commit",
+		"root",
+		"indexer",
+		"failure_summary",
+		"failure_stacktrace",
+	}
+
+	var termConds []*sqlf.Query
+	for _, column := range searchableFields {
+		termConds = append(termConds, sqlf.Sprintf("u."+column+" LIKE %s", "%"+term+"%"))
+	}
+
+	return sqlf.Sprintf("(%s)", sqlf.Join(termConds, " OR "))
 }
 
 func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string) (_ int, _ TxCloser, err error) {
@@ -194,7 +190,7 @@ func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (
 
 	repositoryID, visibleAtTip, err := scanVisibility(tw.queryRow(context.Background(), sqlf.Sprintf(query, id)))
 	if err != nil {
-		return false, ignoreNoRows(err)
+		return false, ignoreErrNoRows(err)
 	}
 
 	if !visibleAtTip {
@@ -211,31 +207,6 @@ func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (
 	}
 
 	return true, nil
-}
-
-// TODO  should be in dumps.go?
-func (db *dbImpl) updateDumpsVisibleFromTip(tw *transactionWrapper, repositoryID int, tipCommit string) (err error) {
-	if tw == nil {
-		tw, err = db.beginTx(context.Background())
-		if err != nil {
-			return
-		}
-		defer func() {
-			err = closeTx(tw.tx, err)
-		}()
-	}
-
-	// Update dump records by:
-	//   (1) unsetting the visibility flag of all previously visible dumps, and
-	//   (2) setting the visibility flag of all currently visible dumps
-	query := `
-		UPDATE lsif_dumps d
-		SET visible_at_tip = id IN (SELECT * from visible_ids)
-		WHERE d.repository_id = %s AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
-	`
-
-	_, err = tw.exec(context.Background(), withAncestorLineage(query, repositoryID, tipCommit, repositoryID))
-	return
 }
 
 func (db *dbImpl) ResetStalled() ([]int, error) {

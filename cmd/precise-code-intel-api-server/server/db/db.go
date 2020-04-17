@@ -15,11 +15,9 @@ type DB interface {
 	GetStates(ids []int) (map[int]string, error)
 	DeleteUploadByID(id int, getTipCommit func(repositoryID int) (string, error)) (bool, error)
 	ResetStalled() ([]int, error)
-
 	GetDumpByID(id int) (Dump, bool, error)
 	FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error)
 	DeleteOldestDump() (int, bool, error)
-
 	GetPackage(scheme, name, version string) (Dump, bool, error)
 	SameRepoPager(repositoryID int, commit, scheme, name, version string, limit int) (int, *ReferencePager, error)
 	PackageReferencePager(scheme, name, version string, repositoryID, limit int) (int, *ReferencePager, error)

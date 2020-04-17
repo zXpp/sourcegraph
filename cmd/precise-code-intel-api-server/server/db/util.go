@@ -6,7 +6,7 @@ import (
 	"github.com/keegancsmith/sqlf"
 )
 
-func ignoreNoRows(err error) error {
+func ignoreErrNoRows(err error) error {
 	if err == sql.ErrNoRows {
 		return nil
 	}

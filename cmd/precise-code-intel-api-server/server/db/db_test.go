@@ -146,7 +146,7 @@ func insertCommits(t *testing.T, db *sql.DB, commits map[string][]string) {
 }
 
 func getDumpVisibilities(t *testing.T, db *sql.DB) map[int]bool {
-	visibilities, err := scanVisibilities(db.Query("SELECT id, visible_at_tip FROM lsif_uploads"))
+	visibilities, err := scanVisibilities(db.Query("SELECT id, visible_at_tip FROM lsif_dumps"))
 	if err != nil {
 		t.Fatalf("unexpected error while scanning dump visibility: %s", err)
 	}
