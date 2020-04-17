@@ -36,7 +36,7 @@ func TestHover(t *testing.T) {
 	}
 
 	// returns hover text from same dump
-	mockBundleClient.hover = func(path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
+	mockBundleClient.hover = func(ctx context.Context, path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
 		if path != "main.go" {
 			t.Errorf("unexpected path. want=%v have=%v", "main.go", path)
 		}
@@ -140,17 +140,17 @@ func TestHoverRemoteDefinitionHoverText(t *testing.T) {
 	}
 
 	// returns no hover text from same dump
-	mockBundleClient1.hover = func(path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
+	mockBundleClient1.hover = func(ctx context.Context, path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
 		return "", bundles.Range{}, false, nil
 	}
 
 	// returns no local definitions
-	mockBundleClient1.definitions = func(path string, line, character int) ([]bundles.Location, error) {
+	mockBundleClient1.definitions = func(ctx context.Context, path string, line, character int) ([]bundles.Location, error) {
 		return nil, nil
 	}
 
 	// returns monikers attached to range
-	mockBundleClient1.monikersByPosition = func(path string, line, character int) ([][]bundles.MonikerData, error) {
+	mockBundleClient1.monikersByPosition = func(ctx context.Context, path string, line, character int) ([][]bundles.MonikerData, error) {
 		return [][]bundles.MonikerData{
 			{
 				bundles.MonikerData{
@@ -163,7 +163,7 @@ func TestHoverRemoteDefinitionHoverText(t *testing.T) {
 		}, nil
 	}
 	// resolves package information from moniker
-	mockBundleClient1.packageInformation = func(path, packageInformationID string) (bundles.PackageInformationData, error) {
+	mockBundleClient1.packageInformation = func(ctx context.Context, path, packageInformationID string) (bundles.PackageInformationData, error) {
 		return bundles.PackageInformationData{Name: "leftpad", Version: "0.1.0"}, nil
 	}
 	// returns dump that provides package
@@ -171,7 +171,7 @@ func TestHoverRemoteDefinitionHoverText(t *testing.T) {
 		return dump2, true, nil
 	}
 	// returns monikers from remote dump
-	mockBundleClient2.monikerResults = func(modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
+	mockBundleClient2.monikerResults = func(ctx context.Context, modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
 		return []bundles.Location{
 			{DumpID: 50, Path: "foo.go", Range: r1},
 			{DumpID: 50, Path: "bar.go", Range: r2},
@@ -180,7 +180,7 @@ func TestHoverRemoteDefinitionHoverText(t *testing.T) {
 	}
 
 	// returns hover text from remote dump
-	mockBundleClient2.hover = func(path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
+	mockBundleClient2.hover = func(ctx context.Context, path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
 		if path != "foo.go" {
 			t.Errorf("unexpected path. want=%v have=%v", "main.go", path)
 		}
@@ -232,17 +232,17 @@ func TestHoverUnknownDefinition(t *testing.T) {
 	}
 
 	// returns no hover text from same dump
-	mockBundleClient.hover = func(path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
+	mockBundleClient.hover = func(ctx context.Context, path string, line, character int) (text string, r bundles.Range, exists bool, err error) {
 		return "", bundles.Range{}, false, nil
 	}
 
 	// returns no local definitions
-	mockBundleClient.definitions = func(path string, line, character int) ([]bundles.Location, error) {
+	mockBundleClient.definitions = func(ctx context.Context, path string, line, character int) ([]bundles.Location, error) {
 		return nil, nil
 	}
 
 	// returns monikers attached to range
-	mockBundleClient.monikersByPosition = func(path string, line, character int) ([][]bundles.MonikerData, error) {
+	mockBundleClient.monikersByPosition = func(ctx context.Context, path string, line, character int) ([][]bundles.MonikerData, error) {
 		return [][]bundles.MonikerData{
 			{
 				bundles.MonikerData{
@@ -255,7 +255,7 @@ func TestHoverUnknownDefinition(t *testing.T) {
 		}, nil
 	}
 	// resolves package information from moniker
-	mockBundleClient.packageInformation = func(path, packageInformationID string) (bundles.PackageInformationData, error) {
+	mockBundleClient.packageInformation = func(ctx context.Context, path, packageInformationID string) (bundles.PackageInformationData, error) {
 		return bundles.PackageInformationData{Name: "leftpad", Version: "0.1.0"}, nil
 	}
 	// no dump provides package

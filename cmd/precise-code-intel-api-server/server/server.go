@@ -206,7 +206,7 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 
 	id, closer, err := s.db.Enqueue(context.Background(), commit, root, tracingContext, repositoryID, indexerName)
 	if err == nil {
-		err = closer.CloseTx(s.bundleManagerClient.SendUpload(id, f))
+		err = closer.CloseTx(s.bundleManagerClient.SendUpload(context.Background(), id, f))
 	}
 	if err != nil {
 		log15.Error("Failed to enqueue payload", "error", err)
@@ -225,7 +225,7 @@ func (s *Server) handleExists(w http.ResponseWriter, r *http.Request) {
 	commit := q.Get("commit")
 	file := q.Get("path")
 
-	dumps, err := s.findClosestDatabase(repositoryID, commit, file)
+	dumps, err := s.findClosestDumps(repositoryID, commit, file)
 	if err != nil {
 		log15.Error("Failed to handle exists request", "error", err)
 		http.Error(w, fmt.Sprintf("failed to handle exists request: %s", err.Error()), http.StatusInternalServerError)

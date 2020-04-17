@@ -7,8 +7,7 @@ import (
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 )
 
-// TODO - rename
-func (s *Server) findClosestDatabase(repositoryID int, commit, file string) ([]db.Dump, error) {
+func (s *Server) findClosestDumps(repositoryID int, commit, file string) ([]db.Dump, error) {
 	candidates, err := s.db.FindClosestDumps(context.Background(), repositoryID, commit, file)
 	if err != nil {
 		return nil, err
@@ -16,7 +15,7 @@ func (s *Server) findClosestDatabase(repositoryID int, commit, file string) ([]d
 
 	var dumps []db.Dump
 	for _, dump := range candidates {
-		exists, err := s.bundleManagerClient.BundleClient(dump.ID).Exists(strings.TrimPrefix(file, dump.Root))
+		exists, err := s.bundleManagerClient.BundleClient(dump.ID).Exists(context.Background(), strings.TrimPrefix(file, dump.Root))
 		if err != nil {
 			return nil, err
 		}

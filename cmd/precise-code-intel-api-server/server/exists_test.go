@@ -51,25 +51,25 @@ func TestFindClosestDatabase(t *testing.T) {
 		return nil
 	}
 
-	mockBundleClient1.exists = func(path string) (bool, error) {
+	mockBundleClient1.exists = func(ctx context.Context, path string) (bool, error) {
 		if path != "main.go" {
 			t.Errorf("unexpected path. want=%s have=%s", "main.go", path)
 		}
 		return true, nil
 	}
-	mockBundleClient2.exists = func(path string) (bool, error) {
+	mockBundleClient2.exists = func(ctx context.Context, path string) (bool, error) {
 		if path != "main.go" {
 			t.Errorf("unexpected path. want=%s have=%s", "main.go", path)
 		}
 		return false, nil
 	}
-	mockBundleClient3.exists = func(path string) (bool, error) {
+	mockBundleClient3.exists = func(ctx context.Context, path string) (bool, error) {
 		if path != "main.go" {
 			t.Errorf("unexpected path. want=%s have=%s", "main.go", path)
 		}
 		return true, nil
 	}
-	mockBundleClient4.exists = func(path string) (bool, error) {
+	mockBundleClient4.exists = func(ctx context.Context, path string) (bool, error) {
 		if path != "s1/main.go" {
 			t.Errorf("unexpected path. want=%s have=%s", "main.go", path)
 		}
@@ -81,7 +81,7 @@ func TestFindClosestDatabase(t *testing.T) {
 		bundleManagerClient: mockBundleManagerClient,
 	}
 
-	dumps, err := s.findClosestDatabase(42, "deadbeef01deadbeef02deadbeef03deadbeef04", "s1/main.go")
+	dumps, err := s.findClosestDumps(42, "deadbeef01deadbeef02deadbeef03deadbeef04", "s1/main.go")
 	if err != nil {
 		t.Errorf("unexpected error finding closest database: %s", err)
 	}

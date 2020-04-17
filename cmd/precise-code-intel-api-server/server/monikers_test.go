@@ -61,7 +61,7 @@ func TestLookupMoniker(t *testing.T) {
 	}
 
 	// resolves package information from moniker
-	mockBundleClient1.packageInformation = func(path, packageInformationID string) (bundles.PackageInformationData, error) {
+	mockBundleClient1.packageInformation = func(ctx context.Context, path, packageInformationID string) (bundles.PackageInformationData, error) {
 		if path != "sub/main.go" {
 			t.Errorf("unexpected path. want=%v have=%v", "main.go", path)
 		}
@@ -86,7 +86,7 @@ func TestLookupMoniker(t *testing.T) {
 	}
 
 	// returns monikers from package dump
-	mockBundleClient2.monikerResults = func(modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
+	mockBundleClient2.monikerResults = func(ctx context.Context, modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
 		if modelType != "definitions" {
 			t.Errorf("unexpected model type. want=%v have=%v", "definitions", modelType)
 		}
@@ -166,7 +166,7 @@ func TestLookupMonikerNoPackage(t *testing.T) {
 	mockBundleManagerClient.bundleClient = func(bundleID int) bundles.BundleClient {
 		return mockBundleClient
 	}
-	mockBundleClient.packageInformation = func(path, packageInformationID string) (bundles.PackageInformationData, error) {
+	mockBundleClient.packageInformation = func(ctx context.Context, path, packageInformationID string) (bundles.PackageInformationData, error) {
 		return bundles.PackageInformationData{Name: "leftpad", Version: "0.1.0"}, nil
 	}
 	mockDB.getPackage = func(ctx context.Context, scheme, name, version string) (db.Dump, bool, error) {

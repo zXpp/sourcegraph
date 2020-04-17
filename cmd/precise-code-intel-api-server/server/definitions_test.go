@@ -44,7 +44,7 @@ func TestDefinitions(t *testing.T) {
 	}
 
 	// returns local definitions
-	mockBundleClient.definitions = func(path string, line, character int) ([]bundles.Location, error) {
+	mockBundleClient.definitions = func(ctx context.Context, path string, line, character int) ([]bundles.Location, error) {
 		if path != "main.go" {
 			t.Errorf("unexpected path. want=%v have=%v", "main.go", path)
 		}
@@ -135,12 +135,12 @@ func TestDefinitionViaSameDumpMoniker(t *testing.T) {
 	}
 
 	// returns no local definitions
-	mockBundleClient.definitions = func(path string, line, character int) ([]bundles.Location, error) {
+	mockBundleClient.definitions = func(ctx context.Context, path string, line, character int) ([]bundles.Location, error) {
 		return nil, nil
 	}
 
 	// returns monikers attached to range
-	mockBundleClient.monikersByPosition = func(path string, line, character int) ([][]bundles.MonikerData, error) {
+	mockBundleClient.monikersByPosition = func(ctx context.Context, path string, line, character int) ([][]bundles.MonikerData, error) {
 		if path != "main.go" {
 			t.Errorf("unexpected path. want=%v have=%v", "main.go", path)
 		}
@@ -162,7 +162,7 @@ func TestDefinitionViaSameDumpMoniker(t *testing.T) {
 	}
 
 	// returns locations of export moniker from same dump
-	mockBundleClient.monikerResults = func(modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
+	mockBundleClient.monikerResults = func(ctx context.Context, modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
 		if modelType != "definitions" {
 			t.Errorf("unexpected model type. want=%v have=%v", "definitions", modelType)
 		}
@@ -251,12 +251,12 @@ func TestDefinitionViaRemoteDumpMoniker(t *testing.T) {
 	}
 
 	// returns no local definitions
-	mockBundleClient1.definitions = func(path string, line, character int) ([]bundles.Location, error) {
+	mockBundleClient1.definitions = func(ctx context.Context, path string, line, character int) ([]bundles.Location, error) {
 		return nil, nil
 	}
 
 	// returns monikers attached to range
-	mockBundleClient1.monikersByPosition = func(path string, line, character int) ([][]bundles.MonikerData, error) {
+	mockBundleClient1.monikersByPosition = func(ctx context.Context, path string, line, character int) ([][]bundles.MonikerData, error) {
 		return [][]bundles.MonikerData{
 			{
 				bundles.MonikerData{
@@ -270,7 +270,7 @@ func TestDefinitionViaRemoteDumpMoniker(t *testing.T) {
 	}
 
 	// resolves package information from moniker
-	mockBundleClient1.packageInformation = func(path, packageInformationID string) (bundles.PackageInformationData, error) {
+	mockBundleClient1.packageInformation = func(ctx context.Context, path, packageInformationID string) (bundles.PackageInformationData, error) {
 		if path != "main.go" {
 			t.Errorf("unexpected path. want=%v have=%v", "main.go", path)
 		}
@@ -295,7 +295,7 @@ func TestDefinitionViaRemoteDumpMoniker(t *testing.T) {
 	}
 
 	// returns monikers from remote dump
-	mockBundleClient2.monikerResults = func(modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
+	mockBundleClient2.monikerResults = func(ctx context.Context, modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
 		if modelType != "definitions" {
 			t.Errorf("unexpected model type. want=%v have=%v", "definitions", modelType)
 		}

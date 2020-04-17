@@ -47,7 +47,6 @@ func encodeCursor(cursor Cursor) string {
 }
 
 // TODO - test
-// TODO - move?
 func decodeCursorFromRequest(r *http.Request, db db.DB, bundleManagerClient bundles.BundleManagerClient) (Cursor, error) {
 	q := r.URL.Query()
 	file := q.Get("path")
@@ -76,7 +75,7 @@ func decodeCursorFromRequest(r *http.Request, db db.DB, bundleManagerClient bund
 	pathInBundle := strings.TrimPrefix(file, dump.Root)
 	bundleClient := bundleManagerClient.BundleClient(dump.ID)
 
-	rangeMonikers, err := bundleClient.MonikersByPosition(pathInBundle, line, character)
+	rangeMonikers, err := bundleClient.MonikersByPosition(context.Background(), pathInBundle, line, character)
 	if err != nil {
 		return Cursor{}, err
 	}

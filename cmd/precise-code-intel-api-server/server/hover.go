@@ -19,7 +19,7 @@ func (s *Server) hover(file string, line, character, uploadID int) (string, bund
 	pathInBundle := strings.TrimPrefix(file, dump.Root)
 	bundleClient := s.bundleManagerClient.BundleClient(dump.ID)
 
-	text, rn, exists, err := bundleClient.Hover(pathInBundle, line, character)
+	text, rn, exists, err := bundleClient.Hover(context.Background(), pathInBundle, line, character)
 	if err != nil {
 		return "", bundles.Range{}, false, err
 	}
@@ -35,5 +35,5 @@ func (s *Server) hover(file string, line, character, uploadID int) (string, bund
 	pathInDefinitionBundle := strings.TrimPrefix(definition.Path, definition.Dump.Root)
 	definitionBundleClient := s.bundleManagerClient.BundleClient(definition.Dump.ID)
 
-	return definitionBundleClient.Hover(pathInDefinitionBundle, definition.Range.Start.Line, definition.Range.Start.Character)
+	return definitionBundleClient.Hover(context.Background(), pathInDefinitionBundle, definition.Range.Start.Line, definition.Range.Start.Character)
 }

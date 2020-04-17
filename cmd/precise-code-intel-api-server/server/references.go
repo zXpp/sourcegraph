@@ -68,7 +68,7 @@ func (s *ReferencePageResolver) handleSameDumpCursor(cursor Cursor) ([]ResolvedL
 	}
 	bundleClient := s.bundleManagerClient.BundleClient(dump.ID)
 
-	locations, err := bundleClient.References(cursor.Path, cursor.Line, cursor.Character)
+	locations, err := bundleClient.References(context.Background(), cursor.Path, cursor.Line, cursor.Character)
 	if err != nil {
 		return nil, Cursor{}, false, err
 	}
@@ -78,7 +78,7 @@ func (s *ReferencePageResolver) handleSameDumpCursor(cursor Cursor) ([]ResolvedL
 	// the governing definition, and those may not be fully linked in the LSIF data. This
 	// method returns a cursor if there are reference rows remaining for a subsequent page.
 	for _, moniker := range cursor.Monikers {
-		results, _, err := bundleClient.MonikerResults("reference", moniker.Scheme, moniker.Identifier, 0, 0)
+		results, _, err := bundleClient.MonikerResults(context.Background(), "reference", moniker.Scheme, moniker.Identifier, 0, 0)
 		if err != nil {
 			return nil, Cursor{}, false, err
 		}
@@ -123,7 +123,7 @@ func (s *ReferencePageResolver) handleDefinitionMonikersCursor(cursor Cursor) ([
 			continue
 		}
 
-		packageInformation, err := s.bundleManagerClient.BundleClient(cursor.DumpID).PackageInformation(cursor.Path, moniker.PackageInformationID)
+		packageInformation, err := s.bundleManagerClient.BundleClient(cursor.DumpID).PackageInformation(context.Background(), cursor.Path, moniker.PackageInformationID)
 		if err != nil {
 			return nil, Cursor{}, false, err
 		}
@@ -279,7 +279,7 @@ func (s *ReferencePageResolver) fooborp(cursor Cursor, q func() (int, *db.Refere
 		}
 		bundleClient := s.bundleManagerClient.BundleClient(dump.ID)
 
-		results, count, err := bundleClient.MonikerResults("reference", scheme, identifier, limit, cursor.SkipResultsInDump)
+		results, count, err := bundleClient.MonikerResults(context.Background(), "reference", scheme, identifier, limit, cursor.SkipResultsInDump)
 		if err != nil {
 			return nil, Cursor{}, false, err
 		}

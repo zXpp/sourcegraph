@@ -21,7 +21,7 @@ func lookupMoniker(
 		return nil, 0, nil
 	}
 
-	pid, err := bundleManagerClient.BundleClient(dumpID).PackageInformation(path, moniker.PackageInformationID)
+	pid, err := bundleManagerClient.BundleClient(dumpID).PackageInformation(context.Background(), path, moniker.PackageInformationID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -31,7 +31,7 @@ func lookupMoniker(
 		return nil, 0, err
 	}
 
-	locations, count, err := bundleManagerClient.BundleClient(dump.ID).MonikerResults(modelType, moniker.Scheme, moniker.Identifier, skip, take)
+	locations, count, err := bundleManagerClient.BundleClient(dump.ID).MonikerResults(context.Background(), modelType, moniker.Scheme, moniker.Identifier, skip, take)
 	if err != nil {
 		return nil, 0, err
 	}

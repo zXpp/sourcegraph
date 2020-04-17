@@ -23,7 +23,7 @@ func (s *Server) definitions(file string, line, character, uploadID int) ([]Reso
 }
 
 func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient, pathInBundle string, line, character int) ([]ResolvedLocation, error) {
-	locations, err := bundleClient.Definitions(pathInBundle, line, character)
+	locations, err := bundleClient.Definitions(context.Background(), pathInBundle, line, character)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient,
 		return resolveLocationsWithDump(dump, locations), nil
 	}
 
-	rangeMonikers, err := bundleClient.MonikersByPosition(pathInBundle, line, character)
+	rangeMonikers, err := bundleClient.MonikersByPosition(context.Background(), pathInBundle, line, character)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s *Server) definitionsRaw(dump db.Dump, bundleClient bundles.BundleClient,
 				// table of our own database in case there was a definition that wasn't properly
 				// attached to a result set but did have the correct monikers attached.
 
-				locations, _, err := bundleClient.MonikerResults("definitions", moniker.Scheme, moniker.Identifier, 0, 0)
+				locations, _, err := bundleClient.MonikerResults(context.Background(), "definitions", moniker.Scheme, moniker.Identifier, 0, 0)
 				if err != nil {
 					return nil, err
 				}
