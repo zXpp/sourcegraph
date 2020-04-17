@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
@@ -58,7 +59,7 @@ func (s *ReferencePageResolver) dispatchCursorHandler(cursor Cursor) ([]Resolved
 }
 
 func (s *ReferencePageResolver) handleSameDumpCursor(cursor Cursor) ([]ResolvedLocation, Cursor, bool, error) {
-	dump, exists, err := s.db.GetDumpByID(cursor.DumpID)
+	dump, exists, err := s.db.GetDumpByID(context.Background(), cursor.DumpID)
 	if err != nil {
 		return nil, Cursor{}, false, err
 	}
@@ -177,7 +178,7 @@ func (s *ReferencePageResolver) handleDefinitionMonikersCursor(cursor Cursor) ([
 
 func (s *ReferencePageResolver) handleSameRepoCursor(cursor Cursor) ([]ResolvedLocation, Cursor, bool, error) {
 	locations, newCursor, hasNewCursor, err := s.fooborp(cursor, func() (int, *db.ReferencePager, error) {
-		return s.db.SameRepoPager(s.repositoryID, s.commit, cursor.Scheme, cursor.Name, cursor.Version, s.remoteDumpLimit)
+		return s.db.SameRepoPager(context.Background(), s.repositoryID, s.commit, cursor.Scheme, cursor.Name, cursor.Version, s.remoteDumpLimit)
 	})
 	if err != nil || hasNewCursor {
 		return locations, newCursor, hasNewCursor, err
@@ -201,7 +202,7 @@ func (s *ReferencePageResolver) handleSameRepoCursor(cursor Cursor) ([]ResolvedL
 
 func (s *ReferencePageResolver) handleRemoteRepoCursor(cursor Cursor) ([]ResolvedLocation, Cursor, bool, error) {
 	return s.fooborp(cursor, func() (int, *db.ReferencePager, error) {
-		return s.db.PackageReferencePager(cursor.Scheme, cursor.Name, cursor.Version, s.repositoryID, s.remoteDumpLimit)
+		return s.db.PackageReferencePager(context.Background(), cursor.Scheme, cursor.Name, cursor.Version, s.repositoryID, s.remoteDumpLimit)
 	})
 }
 
@@ -269,7 +270,7 @@ func (s *ReferencePageResolver) fooborp(cursor Cursor, q func() (int, *db.Refere
 			continue
 		}
 
-		dump, exists, err := s.db.GetDumpByID(cursor.DumpID)
+		dump, exists, err := s.db.GetDumpByID(context.Background(), cursor.DumpID)
 		if err != nil {
 			return nil, Cursor{}, false, err
 		}

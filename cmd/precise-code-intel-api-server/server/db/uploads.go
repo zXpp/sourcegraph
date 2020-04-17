@@ -30,7 +30,7 @@ type Upload struct {
 	Rank              *int       `json:"placeInQueue"`
 }
 
-func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
+func (db *dbImpl) GetUploadByID(ctx context.Context, id int) (Upload, bool, error) {
 	query := `
 		SELECT
 			u.id,
@@ -57,7 +57,7 @@ func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
 		WHERE u.id = %s
 	`
 
-	upload, err := scanUpload(db.queryRow(context.Background(), sqlf.Sprintf(query, id)))
+	upload, err := scanUpload(db.queryRow(ctx, sqlf.Sprintf(query, id)))
 	if err != nil {
 		return Upload{}, false, ignoreErrNoRows(err)
 	}
@@ -65,8 +65,8 @@ func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
 	return upload, true, nil
 }
 
-func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) (_ []Upload, _ int, err error) {
-	tw, err := db.beginTx(context.Background())
+func (db *dbImpl) GetUploadsByRepo(ctx context.Context, repositoryID int, state, term string, visibleAtTip bool, limit, offset int) (_ []Upload, _ int, err error) {
+	tw, err := db.beginTx(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -87,7 +87,7 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 	}
 
 	countQuery := `SELECT COUNT(1) FROM lsif_uploads u WHERE %s`
-	count, err := scanInt(tw.queryRow(context.Background(), sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
+	count, err := scanInt(tw.queryRow(ctx, sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -118,7 +118,7 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 		WHERE %s ORDER BY uploaded_at DESC LIMIT %d OFFSET %d
 	`
 
-	uploads, err := scanUploads(tw.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
+	uploads, err := scanUploads(tw.query(ctx, sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -144,8 +144,8 @@ func makeSearchCondition(term string) *sqlf.Query {
 	return sqlf.Sprintf("(%s)", sqlf.Join(termConds, " OR "))
 }
 
-func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string) (_ int, _ TxCloser, err error) {
-	tw, err := db.beginTx(context.Background())
+func (db *dbImpl) Enqueue(ctx context.Context, commit, root, tracingContext string, repositoryID int, indexerName string) (_ int, _ TxCloser, err error) {
+	tw, err := db.beginTx(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -161,7 +161,7 @@ func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int,
 		RETURNING id
 	`
 
-	id, err := scanInt(tw.queryRow(context.Background(), sqlf.Sprintf(query, commit, root, tracingContext, repositoryID, indexerName)))
+	id, err := scanInt(tw.queryRow(ctx, sqlf.Sprintf(query, commit, root, tracingContext, repositoryID, indexerName)))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -169,17 +169,17 @@ func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int,
 	return id, &txCloser{tw.tx}, nil
 }
 
-func (db *dbImpl) GetStates(ids []int) (map[int]string, error) {
+func (db *dbImpl) GetStates(ctx context.Context, ids []int) (map[int]string, error) {
 	query := `
 		SELECT id, state FROM lsif_uploads
 		WHERE id IN (%s)
 	`
 
-	return scanStates(db.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
+	return scanStates(db.query(ctx, sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
 }
 
-func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (string, error)) (_ bool, err error) {
-	tw, err := db.beginTx(context.Background())
+func (db *dbImpl) DeleteUploadByID(ctx context.Context, id int, getTipCommit func(repositoryID int) (string, error)) (_ bool, err error) {
+	tw, err := db.beginTx(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -193,7 +193,7 @@ func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (
 		RETURNING repository_id, visible_at_tip
 	`
 
-	repositoryID, visibleAtTip, err := scanVisibility(tw.queryRow(context.Background(), sqlf.Sprintf(query, id)))
+	repositoryID, visibleAtTip, err := scanVisibility(tw.queryRow(ctx, sqlf.Sprintf(query, id)))
 	if err != nil {
 		return false, ignoreErrNoRows(err)
 	}
@@ -207,14 +207,14 @@ func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (
 		return false, err
 	}
 
-	if err := db.updateDumpsVisibleFromTip(tw, repositoryID, tipCommit); err != nil {
+	if err := db.updateDumpsVisibleFromTip(ctx, tw, repositoryID, tipCommit); err != nil {
 		return false, err
 	}
 
 	return true, nil
 }
 
-func (db *dbImpl) ResetStalled() ([]int, error) {
+func (db *dbImpl) ResetStalled(ctx context.Context) ([]int, error) {
 	query := `
 		UPDATE lsif_uploads u SET state = 'queued', started_at = null WHERE id = ANY(
 			SELECT id FROM lsif_uploads
@@ -224,7 +224,7 @@ func (db *dbImpl) ResetStalled() ([]int, error) {
 		RETURNING u.id
 	`
 
-	ids, err := scanInts(db.query(context.Background(), sqlf.Sprintf(query, StalledUploadMaxAge/time.Second)))
+	ids, err := scanInts(db.query(ctx, sqlf.Sprintf(query, StalledUploadMaxAge/time.Second)))
 	if err != nil {
 		return nil, err
 	}

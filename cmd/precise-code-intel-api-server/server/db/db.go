@@ -9,18 +9,18 @@ import (
 )
 
 type DB interface {
-	GetUploadByID(id int) (Upload, bool, error)
-	GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) ([]Upload, int, error)
-	Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string) (int, TxCloser, error)
-	GetStates(ids []int) (map[int]string, error)
-	DeleteUploadByID(id int, getTipCommit func(repositoryID int) (string, error)) (bool, error)
-	ResetStalled() ([]int, error)
-	GetDumpByID(id int) (Dump, bool, error)
-	FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error)
-	DeleteOldestDump() (int, bool, error)
-	GetPackage(scheme, name, version string) (Dump, bool, error)
-	SameRepoPager(repositoryID int, commit, scheme, name, version string, limit int) (int, *ReferencePager, error)
-	PackageReferencePager(scheme, name, version string, repositoryID, limit int) (int, *ReferencePager, error)
+	GetUploadByID(ctx context.Context, id int) (Upload, bool, error)
+	GetUploadsByRepo(ctx context.Context, repositoryID int, state, term string, visibleAtTip bool, limit, offset int) ([]Upload, int, error)
+	Enqueue(ctx context.Context, commit, root, tracingContext string, repositoryID int, indexerName string) (int, TxCloser, error)
+	GetStates(ctx context.Context, ids []int) (map[int]string, error)
+	DeleteUploadByID(ctx context.Context, id int, getTipCommit func(repositoryID int) (string, error)) (bool, error)
+	ResetStalled(ctx context.Context) ([]int, error)
+	GetDumpByID(ctx context.Context, id int) (Dump, bool, error)
+	FindClosestDumps(ctx context.Context, repositoryID int, commit, file string) ([]Dump, error)
+	DeleteOldestDump(ctx context.Context) (int, bool, error)
+	GetPackage(ctx context.Context, scheme, name, version string) (Dump, bool, error)
+	SameRepoPager(ctx context.Context, repositoryID int, commit, scheme, name, version string, limit int) (int, *ReferencePager, error)
+	PackageReferencePager(ctx context.Context, scheme, name, version string, repositoryID, limit int) (int, *ReferencePager, error)
 }
 
 type dbImpl struct {

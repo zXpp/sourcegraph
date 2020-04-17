@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestFindClosestDatabase(t *testing.T) {
 	mockBundleClient3 := &mockBundleClient{}
 	mockBundleClient4 := &mockBundleClient{}
 
-	mockDB.findClosestDumps = func(repositoryID int, commit, file string) ([]db.Dump, error) {
+	mockDB.findClosestDumps = func(ctx context.Context, repositoryID int, commit, file string) ([]db.Dump, error) {
 		if repositoryID != 42 {
 			t.Errorf("unexpected repository id. want=%d have=%d", 42, repositoryID)
 		}

@@ -89,7 +89,7 @@ func (s *Server) handler() http.Handler {
 
 // GET /uploads/{id:[0-9]+}
 func (s *Server) handleGetUploadByID(w http.ResponseWriter, r *http.Request) {
-	upload, exists, err := s.db.GetUploadByID(int(idFromRequest(r)))
+	upload, exists, err := s.db.GetUploadByID(context.Background(), int(idFromRequest(r)))
 	if err != nil {
 		log15.Error("Failed to retrieve upload", "error", err)
 		http.Error(w, fmt.Sprintf("failed to retrieve upload: %s", err.Error()), http.StatusInternalServerError)
@@ -105,7 +105,7 @@ func (s *Server) handleGetUploadByID(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /uploads/{id:[0-9]+}
 func (s *Server) handleDeleteUploadByID(w http.ResponseWriter, r *http.Request) {
-	exists, err := s.db.DeleteUploadByID(int(idFromRequest(r)), func(repositoryID int) (string, error) {
+	exists, err := s.db.DeleteUploadByID(context.Background(), int(idFromRequest(r)), func(repositoryID int) (string, error) {
 		// TODO - move this
 		// TODO - don't have this dependency on repo
 		repo, err := sgdb.Repos.Get(context.Background(), api.RepoID(repositoryID))
@@ -147,7 +147,7 @@ func (s *Server) handleGetUploadsByRepo(w http.ResponseWriter, r *http.Request) 
 	}
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
-	uploads, totalCount, err := s.db.GetUploadsByRepo(id, state, term, visibleAtTip, limit, offset)
+	uploads, totalCount, err := s.db.GetUploadsByRepo(context.Background(), id, state, term, visibleAtTip, limit, offset)
 	if err != nil {
 		log15.Error("Failed to list uploads", "error", err)
 		http.Error(w, fmt.Sprintf("failed to list uploads: %s", err.Error()), http.StatusInternalServerError)
@@ -204,7 +204,7 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	id, closer, err := s.db.Enqueue(commit, root, tracingContext, repositoryID, indexerName)
+	id, closer, err := s.db.Enqueue(context.Background(), commit, root, tracingContext, repositoryID, indexerName)
 	if err == nil {
 		err = closer.CloseTx(s.bundleManagerClient.SendUpload(id, f))
 	}
@@ -344,7 +344,7 @@ func (s *Server) handleUploads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	states, err := s.db.GetStates(payload.IDs)
+	states, err := s.db.GetStates(context.Background(), payload.IDs)
 	if err != nil {
 		log15.Error("Failed to retrieve upload states", "error", err)
 		http.Error(w, fmt.Sprintf("failed to retrieve upload states: %s", err.Error()), http.StatusInternalServerError)
@@ -361,7 +361,7 @@ func (s *Server) handleUploads(w http.ResponseWriter, r *http.Request) {
 
 // POST /prune
 func (s *Server) handlePrune(w http.ResponseWriter, r *http.Request) {
-	id, prunable, err := s.db.DoPrune()
+	id, prunable, err := s.db.DeleteOldestDump(context.Background())
 	if err != nil {
 		log15.Error("Failed to prune upload", "error", err)
 		http.Error(w, fmt.Sprintf("failed to prune upload: %s", err.Error()), http.StatusInternalServerError)

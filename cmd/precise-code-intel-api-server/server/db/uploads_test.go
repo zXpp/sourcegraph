@@ -28,7 +28,7 @@ func TestGetUploadByID(t *testing.T) {
 	db := &dbImpl{db: dbconn.Global}
 
 	// Upload does not exist initially
-	if _, exists, err := db.GetUploadByID(1); err != nil {
+	if _, exists, err := db.GetUploadByID(context.Background(), 1); err != nil {
 		t.Fatalf("unexpected error getting upload: %s", err)
 	} else if exists {
 		t.Fatal("unexpected record")
@@ -55,7 +55,7 @@ func TestGetUploadByID(t *testing.T) {
 
 	insertUploads(t, db.db, expected)
 
-	if upload, exists, err := db.GetUploadByID(1); err != nil {
+	if upload, exists, err := db.GetUploadByID(context.Background(), 1); err != nil {
 		t.Fatalf("unexpected error getting upload: %s", err)
 	} else if !exists {
 		t.Fatal("expected record to exist")
@@ -80,24 +80,24 @@ func TestGetQueuedUploadRank(t *testing.T) {
 		Upload{ID: 6, UploadedAt: time.Now().UTC().Add(+time.Minute * 2).UTC(), State: "processing"},
 	)
 
-	if upload, _, _ := db.GetUploadByID(1); upload.Rank == nil || *upload.Rank != 1 {
+	if upload, _, _ := db.GetUploadByID(context.Background(), 1); upload.Rank == nil || *upload.Rank != 1 {
 		t.Errorf("unexpected rank. want=%d have=%s", 1, printableRank{upload.Rank})
 	}
-	if upload, _, _ := db.GetUploadByID(2); upload.Rank == nil || *upload.Rank != 5 {
+	if upload, _, _ := db.GetUploadByID(context.Background(), 2); upload.Rank == nil || *upload.Rank != 5 {
 		t.Errorf("unexpected rank. want=%d have=%s", 5, printableRank{upload.Rank})
 	}
-	if upload, _, _ := db.GetUploadByID(3); upload.Rank == nil || *upload.Rank != 3 {
+	if upload, _, _ := db.GetUploadByID(context.Background(), 3); upload.Rank == nil || *upload.Rank != 3 {
 		t.Errorf("unexpected rank. want=%d have=%s", 3, printableRank{upload.Rank})
 	}
-	if upload, _, _ := db.GetUploadByID(4); upload.Rank == nil || *upload.Rank != 2 {
+	if upload, _, _ := db.GetUploadByID(context.Background(), 4); upload.Rank == nil || *upload.Rank != 2 {
 		t.Errorf("unexpected rank. want=%d have=%s", 2, printableRank{upload.Rank})
 	}
-	if upload, _, _ := db.GetUploadByID(5); upload.Rank == nil || *upload.Rank != 4 {
+	if upload, _, _ := db.GetUploadByID(context.Background(), 5); upload.Rank == nil || *upload.Rank != 4 {
 		t.Errorf("unexpected rank. want=%d have=%s", 4, printableRank{upload.Rank})
 	}
 
 	// Only considers queued uploads to determine rank
-	if upload, _, _ := db.GetUploadByID(6); upload.Rank != nil {
+	if upload, _, _ := db.GetUploadByID(context.Background(), 6); upload.Rank != nil {
 		t.Errorf("unexpected rank. want=%s have=%s", "nil", printableRank{upload.Rank})
 	}
 }
@@ -159,7 +159,7 @@ func TestGetUploadsByRepo(t *testing.T) {
 					hi = len(testCase.expectedIDs)
 				}
 
-				uploads, totalCount, err := db.GetUploadsByRepo(50, testCase.state, testCase.term, testCase.visibleAtTip, 3, lo)
+				uploads, totalCount, err := db.GetUploadsByRepo(context.Background(), 50, testCase.state, testCase.term, testCase.visibleAtTip, 3, lo)
 				if err != nil {
 					t.Fatalf("unexpected error getting uploads for repo: %s", err)
 				}
@@ -187,13 +187,13 @@ func TestEnqueue(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	id, closer, err := db.Enqueue(makeCommit(1), "sub/", `{"id": 42}`, 50, "lsif-go")
+	id, closer, err := db.Enqueue(context.Background(), makeCommit(1), "sub/", `{"id": 42}`, 50, "lsif-go")
 	if err != nil {
 		t.Fatalf("unexpected error enqueueing upload: %s", err)
 	}
 
 	// Upload does not exist before transaction commit
-	if _, exists, err := db.GetUploadByID(id); err != nil {
+	if _, exists, err := db.GetUploadByID(context.Background(), id); err != nil {
 		t.Fatalf("unexpected error getting upload: %s", err)
 	} else if exists {
 		t.Fatal("unexpected record")
@@ -220,7 +220,7 @@ func TestEnqueue(t *testing.T) {
 		Rank:              &rank,
 	}
 
-	if upload, exists, err := db.GetUploadByID(id); err != nil {
+	if upload, exists, err := db.GetUploadByID(context.Background(), id); err != nil {
 		t.Fatalf("unexpected error getting upload: %s", err)
 	} else if !exists {
 		t.Fatal("expected record to exist")
@@ -241,14 +241,14 @@ func TestEnqueueRollback(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	id, closer, err := db.Enqueue(makeCommit(1), "sub/", `{"id": 42}`, 50, "lsif-go")
+	id, closer, err := db.Enqueue(context.Background(), makeCommit(1), "sub/", `{"id": 42}`, 50, "lsif-go")
 	if err != nil {
 		t.Fatalf("unexpected error enqueueing upload: %s", err)
 	}
 	_ = closer.CloseTx(fmt.Errorf(""))
 
 	// Upload does not exist after rollback
-	if _, exists, err := db.GetUploadByID(id); err != nil {
+	if _, exists, err := db.GetUploadByID(context.Background(), id); err != nil {
 		t.Fatalf("unexpected error getting upload: %s", err)
 	} else if exists {
 		t.Fatal("unexpected record")
@@ -275,7 +275,7 @@ func TestGetStates(t *testing.T) {
 		4: "errored",
 	}
 
-	if states, err := db.GetStates([]int{1, 2, 4, 6}); err != nil {
+	if states, err := db.GetStates(context.Background(), []int{1, 2, 4, 6}); err != nil {
 		t.Fatalf("unexpected error getting states: %s", err)
 	} else if !reflect.DeepEqual(states, expected) {
 		t.Errorf("unexpected upload states. want=%v have=%v", expected, states)
@@ -299,7 +299,7 @@ func TestDeleteUploadByID(t *testing.T) {
 		return "", nil
 	}
 
-	if found, err := db.DeleteUploadByID(1, getTipCommit); err != nil {
+	if found, err := db.DeleteUploadByID(context.Background(), 1, getTipCommit); err != nil {
 		t.Fatalf("unexpected error deleting upload: %s", err)
 	} else if !found {
 		t.Fatalf("expected record to exist")
@@ -308,7 +308,7 @@ func TestDeleteUploadByID(t *testing.T) {
 	}
 
 	// Upload no longer exists
-	if _, exists, err := db.GetUploadByID(1); err != nil {
+	if _, exists, err := db.GetUploadByID(context.Background(), 1); err != nil {
 		t.Fatalf("unexpected error getting upload: %s", err)
 	} else if exists {
 		t.Fatal("unexpected record")
@@ -326,7 +326,7 @@ func TestDeleteUploadByIDMissingRow(t *testing.T) {
 		return "", nil
 	}
 
-	if found, err := db.DeleteUploadByID(1, getTipCommit); err != nil {
+	if found, err := db.DeleteUploadByID(context.Background(), 1, getTipCommit); err != nil {
 		t.Fatalf("unexpected error deleting upload: %s", err)
 	} else if found {
 		t.Fatalf("unexpected record")
@@ -360,7 +360,7 @@ func TestDeleteUploadByIDUpdatesVisibility(t *testing.T) {
 		return makeCommit(4), nil
 	}
 
-	if found, err := db.DeleteUploadByID(1, getTipCommit); err != nil {
+	if found, err := db.DeleteUploadByID(context.Background(), 1, getTipCommit); err != nil {
 		t.Fatalf("unexpected error deleting upload: %s", err)
 	} else if !found {
 		t.Fatalf("expected record to exist")
@@ -413,7 +413,7 @@ func TestResetStalled(t *testing.T) {
 
 	expected := []int{1, 4}
 
-	if ids, err := db.ResetStalled(); err != nil {
+	if ids, err := db.ResetStalled(context.Background()); err != nil {
 		t.Fatalf("unexpected error resetting stalled uploads: %s", err)
 	} else if !reflect.DeepEqual(ids, expected) {
 		t.Errorf("unexpected ids. want=%v have=%v", expected, ids)

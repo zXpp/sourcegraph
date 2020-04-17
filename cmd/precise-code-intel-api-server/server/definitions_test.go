@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -31,7 +32,7 @@ func TestDefinitions(t *testing.T) {
 	mockBundleManagerClient := &mockBundleManagerClient{}
 	mockBundleClient := &mockBundleClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		return dump, true, nil
 	}
 
@@ -84,7 +85,7 @@ func TestDefinitionsUnknownDump(t *testing.T) {
 	mockDB := &mockDB{}
 	mockBundleManagerClient := &mockBundleManagerClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		return db.Dump{}, false, nil
 	}
 
@@ -122,7 +123,7 @@ func TestDefinitionViaSameDumpMoniker(t *testing.T) {
 	mockBundleManagerClient := &mockBundleManagerClient{}
 	mockBundleClient := &mockBundleClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		return dump, true, nil
 	}
 
@@ -226,7 +227,7 @@ func TestDefinitionViaRemoteDumpMoniker(t *testing.T) {
 	mockBundleClient1 := &mockBundleClient{}
 	mockBundleClient2 := &mockBundleClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		switch id {
 		case 42:
 			return dump1, true, nil
@@ -280,7 +281,7 @@ func TestDefinitionViaRemoteDumpMoniker(t *testing.T) {
 	}
 
 	// returns dump that provides package
-	mockDB.getPackage = func(scheme, name, version string) (db.Dump, bool, error) {
+	mockDB.getPackage = func(ctx context.Context, scheme, name, version string) (db.Dump, bool, error) {
 		if scheme != "gomod" {
 			t.Errorf("unexpected scheme. want=%v have=%v", "gomod", scheme)
 		}

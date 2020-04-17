@@ -1,13 +1,14 @@
 package server
 
 import (
+	"context"
 	"strings"
 
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
 )
 
 func (s *Server) hover(file string, line, character, uploadID int) (string, bundles.Range, bool, error) {
-	dump, exists, err := s.db.GetDumpByID(uploadID)
+	dump, exists, err := s.db.GetDumpByID(context.Background(), uploadID)
 	if err != nil {
 		return "", bundles.Range{}, false, err
 	}

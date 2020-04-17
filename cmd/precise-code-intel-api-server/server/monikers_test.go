@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -71,7 +72,7 @@ func TestLookupMoniker(t *testing.T) {
 	}
 
 	// returns dump that provides package
-	mockDB.getPackage = func(scheme, name, version string) (db.Dump, bool, error) {
+	mockDB.getPackage = func(ctx context.Context, scheme, name, version string) (db.Dump, bool, error) {
 		if scheme != "gomod" {
 			t.Errorf("unexpected scheme. want=%v have=%v", "gomod", scheme)
 		}
@@ -168,7 +169,7 @@ func TestLookupMonikerNoPackage(t *testing.T) {
 	mockBundleClient.packageInformation = func(path, packageInformationID string) (bundles.PackageInformationData, error) {
 		return bundles.PackageInformationData{Name: "leftpad", Version: "0.1.0"}, nil
 	}
-	mockDB.getPackage = func(scheme, name, version string) (db.Dump, bool, error) {
+	mockDB.getPackage = func(ctx context.Context, scheme, name, version string) (db.Dump, bool, error) {
 		return db.Dump{}, false, nil
 	}
 

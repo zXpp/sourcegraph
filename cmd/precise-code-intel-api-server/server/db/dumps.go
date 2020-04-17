@@ -23,7 +23,7 @@ type Dump struct {
 	Indexer           string     `json:"indexer"`
 }
 
-func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
+func (db *dbImpl) GetDumpByID(ctx context.Context, id int) (Dump, bool, error) {
 	query := `
 		SELECT
 			d.id,
@@ -42,7 +42,7 @@ func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 		FROM lsif_dumps d WHERE id = %d
 	`
 
-	dump, err := scanDump(db.queryRow(context.Background(), sqlf.Sprintf(query, id)))
+	dump, err := scanDump(db.queryRow(ctx, sqlf.Sprintf(query, id)))
 	if err != nil {
 		return Dump{}, false, ignoreErrNoRows(err)
 	}
@@ -50,8 +50,8 @@ func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 	return dump, true, nil
 }
 
-func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error) {
-	tw, err := db.beginTx(context.Background())
+func (db *dbImpl) FindClosestDumps(ctx context.Context, repositoryID int, commit, file string) ([]Dump, error) {
+	tw, err := db.beginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 		ORDER BY d.n
 	`
 
-	ids, err := scanInts(tw.query(context.Background(), withBidirectionalLineage(visibleIDsQuery, repositoryID, commit, file)))
+	ids, err := scanInts(tw.query(ctx, withBidirectionalLineage(visibleIDsQuery, repositoryID, commit, file)))
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 		FROM lsif_dumps d WHERE id IN (%s)
 	`
 
-	dumps, err := scanDumps(tw.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
+	dumps, err := scanDumps(tw.query(ctx, sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func deduplicateDumps(allDumps []Dump) (dumps []Dump) {
 	return dumps
 }
 
-func (db *dbImpl) DeleteOldestDump() (int, bool, error) {
+func (db *dbImpl) DeleteOldestDump(ctx context.Context) (int, bool, error) {
 	query := `
 		DELETE FROM lsif_uploads
 		WHERE id IN (
@@ -128,7 +128,7 @@ func (db *dbImpl) DeleteOldestDump() (int, bool, error) {
 		) RETURNING id
 	`
 
-	id, err := scanInt(db.queryRow(context.Background(), sqlf.Sprintf(query)))
+	id, err := scanInt(db.queryRow(ctx, sqlf.Sprintf(query)))
 	if err != nil {
 		return 0, false, ignoreErrNoRows(err)
 	}
@@ -137,9 +137,9 @@ func (db *dbImpl) DeleteOldestDump() (int, bool, error) {
 }
 
 // updateDumpsVisibleFromTip recalculates the visible_at_tip flag of all dumps of the given repository.
-func (db *dbImpl) updateDumpsVisibleFromTip(tw *transactionWrapper, repositoryID int, tipCommit string) (err error) {
+func (db *dbImpl) updateDumpsVisibleFromTip(ctx context.Context, tw *transactionWrapper, repositoryID int, tipCommit string) (err error) {
 	if tw == nil {
-		tw, err = db.beginTx(context.Background())
+		tw, err = db.beginTx(ctx)
 		if err != nil {
 			return
 		}
@@ -157,6 +157,6 @@ func (db *dbImpl) updateDumpsVisibleFromTip(tw *transactionWrapper, repositoryID
 		WHERE d.repository_id = %s AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
 	`
 
-	_, err = tw.exec(context.Background(), withAncestorLineage(query, repositoryID, tipCommit, repositoryID))
+	_, err = tw.exec(ctx, withAncestorLineage(query, repositoryID, tipCommit, repositoryID))
 	return
 }

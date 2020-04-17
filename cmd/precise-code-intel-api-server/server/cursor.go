@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -64,7 +65,7 @@ func decodeCursorFromRequest(r *http.Request, db db.DB, bundleManagerClient bund
 		return cursor, nil
 	}
 
-	dump, exists, err := db.GetDumpByID(uploadID)
+	dump, exists, err := db.GetDumpByID(context.Background(), uploadID)
 	if err != nil {
 		return Cursor{}, err
 	}

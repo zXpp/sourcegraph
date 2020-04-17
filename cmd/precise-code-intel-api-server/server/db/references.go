@@ -11,8 +11,8 @@ type Reference struct {
 	Filter string
 }
 
-func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version string, limit int) (_ int, _ *ReferencePager, err error) {
-	tw, err := db.beginTx(context.Background())
+func (db *dbImpl) SameRepoPager(ctx context.Context, repositoryID int, commit, scheme, name, version string, limit int) (_ int, _ *ReferencePager, err error) {
+	tw, err := db.beginTx(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -23,7 +23,7 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 	}()
 
 	visibleIDsQuery := `SELECT id FROM visible_ids`
-	visibleIDs, err := scanInts(tw.query(context.Background(), withBidirectionalLineage(visibleIDsQuery, repositoryID, commit)))
+	visibleIDs, err := scanInts(tw.query(ctx, withBidirectionalLineage(visibleIDsQuery, repositoryID, commit)))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -40,7 +40,7 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 	}
 
 	countQuery := `SELECT COUNT(1) FROM lsif_references r WHERE %s`
-	totalCount, err := scanInt(tw.queryRow(context.Background(), sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
+	totalCount, err := scanInt(tw.queryRow(ctx, sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -52,14 +52,14 @@ func (db *dbImpl) SameRepoPager(repositoryID int, commit, scheme, name, version 
 			WHERE %s ORDER BY d.root LIMIT %d OFFSET %d
 		`
 
-		return scanReferences(tw.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
+		return scanReferences(tw.query(ctx, sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
 	}
 
 	return totalCount, newReferencePager(tw.tx, pageFromOffset), nil
 }
 
-func (db *dbImpl) PackageReferencePager(scheme, name, version string, repositoryID, limit int) (_ int, _ *ReferencePager, err error) {
-	tw, err := db.beginTx(context.Background())
+func (db *dbImpl) PackageReferencePager(ctx context.Context, scheme, name, version string, repositoryID, limit int) (_ int, _ *ReferencePager, err error) {
+	tw, err := db.beginTx(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -83,7 +83,7 @@ func (db *dbImpl) PackageReferencePager(scheme, name, version string, repository
 		WHERE %s
 	`
 
-	totalCount, err := scanInt(tw.queryRow(context.Background(), sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
+	totalCount, err := scanInt(tw.queryRow(ctx, sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -95,7 +95,7 @@ func (db *dbImpl) PackageReferencePager(scheme, name, version string, repository
 			WHERE %s ORDER BY d.repository_id, d.root LIMIT %d OFFSET %d
 		`
 
-		return scanReferences(tw.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
+		return scanReferences(tw.query(ctx, sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
 	}
 
 	return totalCount, newReferencePager(tw.tx, pageFromOffset), nil

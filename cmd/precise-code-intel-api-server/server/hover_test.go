@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestHover(t *testing.T) {
 	mockBundleManagerClient := &mockBundleManagerClient{}
 	mockBundleClient := &mockBundleClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		return dump, true, nil
 	}
 
@@ -73,7 +74,7 @@ func TestHoverUnknownDump(t *testing.T) {
 	mockDB := &mockDB{}
 	mockBundleManagerClient := &mockBundleManagerClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		return db.Dump{}, false, nil
 	}
 
@@ -115,7 +116,7 @@ func TestHoverRemoteDefinitionHoverText(t *testing.T) {
 	mockBundleClient1 := &mockBundleClient{}
 	mockBundleClient2 := &mockBundleClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		switch id {
 		case 42:
 			return dump1, true, nil
@@ -166,7 +167,7 @@ func TestHoverRemoteDefinitionHoverText(t *testing.T) {
 		return bundles.PackageInformationData{Name: "leftpad", Version: "0.1.0"}, nil
 	}
 	// returns dump that provides package
-	mockDB.getPackage = func(scheme, name, version string) (db.Dump, bool, error) {
+	mockDB.getPackage = func(ctx context.Context, scheme, name, version string) (db.Dump, bool, error) {
 		return dump2, true, nil
 	}
 	// returns monikers from remote dump
@@ -223,7 +224,7 @@ func TestHoverUnknownDefinition(t *testing.T) {
 	mockBundleManagerClient := &mockBundleManagerClient{}
 	mockBundleClient := &mockBundleClient{}
 
-	mockDB.getDumpByID = func(id int) (db.Dump, bool, error) {
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
 		return dump, true, nil
 	}
 	mockBundleManagerClient.bundleClient = func(bundleID int) bundles.BundleClient {
@@ -258,7 +259,7 @@ func TestHoverUnknownDefinition(t *testing.T) {
 		return bundles.PackageInformationData{Name: "leftpad", Version: "0.1.0"}, nil
 	}
 	// no dump provides package
-	mockDB.getPackage = func(scheme, name, version string) (db.Dump, bool, error) {
+	mockDB.getPackage = func(ctx context.Context, scheme, name, version string) (db.Dump, bool, error) {
 		return db.Dump{}, false, nil
 	}
 

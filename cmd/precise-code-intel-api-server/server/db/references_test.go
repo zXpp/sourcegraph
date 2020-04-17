@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -38,7 +39,7 @@ func TestSameRepoPager(t *testing.T) {
 		"deadbeef31deadbeef32deadbeef33deadbeef34": {"deadbeef21deadbeef22deadbeef23deadbeef24"},
 	})
 
-	totalCount, pager, err := db.SameRepoPager(50, "deadbeef01deadbeef02deadbeef03deadbeef04", "gomod", "leftpad", "0.1.0", 5)
+	totalCount, pager, err := db.SameRepoPager(context.Background(), 50, "deadbeef01deadbeef02deadbeef03deadbeef04", "gomod", "leftpad", "0.1.0", 5)
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
@@ -70,7 +71,7 @@ func TestSameRepoPagerEmpty(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	totalCount, pager, err := db.SameRepoPager(50, "deadbeef01deadbeef02deadbeef03deadbeef04", "gomod", "leftpad", "0.1.0", 5)
+	totalCount, pager, err := db.SameRepoPager(context.Background(), 50, "deadbeef01deadbeef02deadbeef03deadbeef04", "gomod", "leftpad", "0.1.0", 5)
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
@@ -116,7 +117,7 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 		"deadbeef01deadbeef02deadbeef03deadbeef04": {},
 	})
 
-	totalCount, pager, err := db.SameRepoPager(50, "deadbeef01deadbeef02deadbeef03deadbeef04", "gomod", "leftpad", "0.1.0", 3)
+	totalCount, pager, err := db.SameRepoPager(context.Background(), 50, "deadbeef01deadbeef02deadbeef03deadbeef04", "gomod", "leftpad", "0.1.0", 3)
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
@@ -184,7 +185,7 @@ func TestSameRepoPagerVisibility(t *testing.T) {
 		makeCommit(6): {makeCommit(5)},
 	})
 
-	totalCount, pager, err := db.SameRepoPager(50, makeCommit(6), "gomod", "leftpad", "0.1.0", 5)
+	totalCount, pager, err := db.SameRepoPager(context.Background(), 50, makeCommit(6), "gomod", "leftpad", "0.1.0", 5)
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
@@ -234,7 +235,7 @@ func TestPackageReferencePager(t *testing.T) {
 		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 7, Filter: "f7"},
 	)
 
-	totalCount, pager, err := db.PackageReferencePager("gomod", "leftpad", "0.1.0", 50, 5)
+	totalCount, pager, err := db.PackageReferencePager(context.Background(), "gomod", "leftpad", "0.1.0", 50, 5)
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
@@ -266,7 +267,7 @@ func TestPackageReferencePagerEmpty(t *testing.T) {
 	dbtesting.SetupGlobalTestDB(t)
 	db := &dbImpl{db: dbconn.Global}
 
-	totalCount, pager, err := db.PackageReferencePager("gomod", "leftpad", "0.1.0", 50, 5)
+	totalCount, pager, err := db.PackageReferencePager(context.Background(), "gomod", "leftpad", "0.1.0", 50, 5)
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
@@ -308,7 +309,7 @@ func TestPackageReferencePagerPages(t *testing.T) {
 		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 9, Filter: "f9"},
 	)
 
-	totalCount, pager, err := db.PackageReferencePager("gomod", "leftpad", "0.1.0", 50, 3)
+	totalCount, pager, err := db.PackageReferencePager(context.Background(), "gomod", "leftpad", "0.1.0", 50, 3)
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
@@ -347,7 +348,6 @@ func TestPackageReferencePagerPages(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-
 		if references, err := pager.PageFromOffset(testCase.offset); err != nil {
 			t.Fatalf("unexpected error getting page at offset %d: %s", testCase.offset, err)
 		} else if !reflect.DeepEqual(references, expected[testCase.lo:testCase.hi]) {

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 )
@@ -24,7 +26,7 @@ func lookupMoniker(
 		return nil, 0, err
 	}
 
-	dump, exists, err := db.GetPackage(moniker.Scheme, pid.Name, pid.Version)
+	dump, exists, err := db.GetPackage(context.Background(), moniker.Scheme, pid.Name, pid.Version)
 	if err != nil || !exists {
 		return nil, 0, err
 	}

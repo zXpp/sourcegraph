@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func TestGetPackage(t *testing.T) {
 	db := &dbImpl{db: dbconn.Global}
 
 	// Package does not exist initially
-	if _, exists, err := db.GetPackage("gomod", "leftpad", "0.1.0"); err != nil {
+	if _, exists, err := db.GetPackage(context.Background(), "gomod", "leftpad", "0.1.0"); err != nil {
 		t.Fatalf("unexpected error getting package: %s", err)
 	} else if exists {
 		t.Fatal("unexpected record")
@@ -65,7 +66,7 @@ func TestGetPackage(t *testing.T) {
 		DumpID:  1,
 	})
 
-	if dump, exists, err := db.GetPackage("gomod", "leftpad", "0.1.0"); err != nil {
+	if dump, exists, err := db.GetPackage(context.Background(), "gomod", "leftpad", "0.1.0"); err != nil {
 		t.Fatalf("unexpected error getting package: %s", err)
 	} else if !exists {
 		t.Fatal("expected record to exist")

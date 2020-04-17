@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"strings"
 
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
@@ -8,7 +9,7 @@ import (
 )
 
 func (s *Server) definitions(file string, line, character, uploadID int) ([]ResolvedLocation, error) {
-	dump, exists, err := s.db.GetDumpByID(uploadID)
+	dump, exists, err := s.db.GetDumpByID(context.Background(), uploadID)
 	if err != nil {
 		return nil, err
 	}

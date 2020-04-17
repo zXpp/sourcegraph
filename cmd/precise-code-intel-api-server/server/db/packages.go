@@ -6,7 +6,7 @@ import (
 	"github.com/keegancsmith/sqlf"
 )
 
-func (db *dbImpl) GetPackage(scheme, name, version string) (Dump, bool, error) {
+func (db *dbImpl) GetPackage(ctx context.Context, scheme, name, version string) (Dump, bool, error) {
 	query := `
 		SELECT
 			d.id,
@@ -28,7 +28,7 @@ func (db *dbImpl) GetPackage(scheme, name, version string) (Dump, bool, error) {
 		LIMIT 1
 	`
 
-	dump, err := scanDump(db.queryRow(context.Background(), sqlf.Sprintf(query, scheme, name, version)))
+	dump, err := scanDump(db.queryRow(ctx, sqlf.Sprintf(query, scheme, name, version)))
 	if err != nil {
 		return Dump{}, false, ignoreErrNoRows(err)
 	}

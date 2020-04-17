@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -18,7 +19,7 @@ func TestGetDumpByID(t *testing.T) {
 	db := &dbImpl{db: dbconn.Global}
 
 	// Dump does not exist initially
-	if _, exists, err := db.GetDumpByID(1); err != nil {
+	if _, exists, err := db.GetDumpByID(context.Background(), 1); err != nil {
 		t.Fatalf("unexpected error getting dump: %s", err)
 	} else if exists {
 		t.Fatal("unexpected record")
@@ -59,7 +60,7 @@ func TestGetDumpByID(t *testing.T) {
 		Indexer:           expected.Indexer,
 	})
 
-	if dump, exists, err := db.GetDumpByID(1); err != nil {
+	if dump, exists, err := db.GetDumpByID(context.Background(), 1); err != nil {
 		t.Fatalf("unexpected error getting dump: %s", err)
 	} else if !exists {
 		t.Fatal("expected record to exist")
@@ -289,7 +290,7 @@ func TestDeleteOldestDump(t *testing.T) {
 	db := &dbImpl{db: dbconn.Global}
 
 	// Cannot prune empty dump set
-	if _, prunable, err := db.DeleteOldestDump(); err != nil {
+	if _, prunable, err := db.DeleteOldestDump(context.Background()); err != nil {
 		t.Fatalf("unexpected error pruning dumps: %s", err)
 	} else if prunable {
 		t.Fatal("unexpectedly prunable")
@@ -308,7 +309,7 @@ func TestDeleteOldestDump(t *testing.T) {
 	)
 
 	// Prune oldest
-	if id, prunable, err := db.DeleteOldestDump(); err != nil {
+	if id, prunable, err := db.DeleteOldestDump(context.Background()); err != nil {
 		t.Fatalf("unexpected error pruning dumps: %s", err)
 	} else if !prunable {
 		t.Fatal("unexpectedly non-prunable")
@@ -317,7 +318,7 @@ func TestDeleteOldestDump(t *testing.T) {
 	}
 
 	// Prune next oldest (skips visible at tip)
-	if id, prunable, err := db.DeleteOldestDump(); err != nil {
+	if id, prunable, err := db.DeleteOldestDump(context.Background()); err != nil {
 		t.Fatalf("unexpected error pruning dumps: %s", err)
 	} else if !prunable {
 		t.Fatal("unexpectedly non-prunable")
@@ -338,7 +339,7 @@ func testFindClosestDumps(t *testing.T, db DB, testCases []FindClosestDumpsTestC
 		name := fmt.Sprintf("commit=%s file=%s", testCase.commit, testCase.file)
 
 		t.Run(name, func(t *testing.T) {
-			dumps, err := db.FindClosestDumps(50, testCase.commit, testCase.file)
+			dumps, err := db.FindClosestDumps(context.Background(), 50, testCase.commit, testCase.file)
 			if err != nil {
 				t.Fatalf("unexpected error finding closest dumps: %s", err)
 			}
@@ -431,7 +432,7 @@ func TestUpdateDumpsVisibleFromTipOverlappingRootsSameIndexer(t *testing.T) {
 		makeCommit(7): {makeCommit(6)},
 	})
 
-	err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(6))
+	err := db.updateDumpsVisibleFromTip(context.Background(), nil, 50, makeCommit(6))
 	if err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	}
@@ -483,7 +484,7 @@ func TestUpdateDumpsVisibleFromTipOverlappingRoots(t *testing.T) {
 		makeCommit(7): {makeCommit(6)},
 	})
 
-	err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(6))
+	err := db.updateDumpsVisibleFromTip(context.Background(), nil, 50, makeCommit(6))
 	if err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	}
@@ -542,7 +543,7 @@ func TestUpdateDumpsVisibleFromTipBranchingPaths(t *testing.T) {
 		makeCommit(7): {makeCommit(6)},
 	})
 
-	err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(9))
+	err := db.updateDumpsVisibleFromTip(context.Background(), nil, 50, makeCommit(9))
 	if err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	}
@@ -581,19 +582,19 @@ func TestUpdateDumpsVisibleFromTipMaxTraversalLimit(t *testing.T) {
 	insertCommits(t, db.db, commits)
 	insertUploads(t, db.db, Upload{ID: 1, Commit: fmt.Sprintf("%040d", MaxTraversalLimit)})
 
-	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(MaxTraversalLimit)); err != nil {
+	if err := db.updateDumpsVisibleFromTip(context.Background(), nil, 50, makeCommit(MaxTraversalLimit)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	} else if visibilities, expected := getDumpVisibilities(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibilities, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 
-	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(1)); err != nil {
+	if err := db.updateDumpsVisibleFromTip(context.Background(), nil, 50, makeCommit(1)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	} else if visibilities, expected := getDumpVisibilities(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibilities, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 
-	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(0)); err != nil {
+	if err := db.updateDumpsVisibleFromTip(context.Background(), nil, 50, makeCommit(0)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
 	} else if visibilities, expected := getDumpVisibilities(t, db.db), map[int]bool{1: false}; !reflect.DeepEqual(visibilities, expected) {
 		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
