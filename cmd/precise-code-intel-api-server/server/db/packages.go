@@ -6,6 +6,7 @@ import (
 	"github.com/keegancsmith/sqlf"
 )
 
+// GetPackage returns the dump that provides the package with the given scheme, name, and version and a flag indicating its existence.
 func (db *dbImpl) GetPackage(ctx context.Context, scheme, name, version string) (Dump, bool, error) {
 	query := `
 		SELECT

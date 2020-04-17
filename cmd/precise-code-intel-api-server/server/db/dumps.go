@@ -7,6 +7,8 @@ import (
 	"github.com/keegancsmith/sqlf"
 )
 
+// Dump is a subset of the lsif_uploads table (queried via the lsif_dumps view) and stores
+// only processed records.
 type Dump struct {
 	ID                int        `json:"id"`
 	Commit            string     `json:"commit"`
@@ -23,6 +25,7 @@ type Dump struct {
 	Indexer           string     `json:"indexer"`
 }
 
+// GetDumpByID returns a dump by its identifier and boolean flag indicating its existence.
 func (db *dbImpl) GetDumpByID(ctx context.Context, id int) (Dump, bool, error) {
 	query := `
 		SELECT
@@ -50,6 +53,7 @@ func (db *dbImpl) GetDumpByID(ctx context.Context, id int) (Dump, bool, error) {
 	return dump, true, nil
 }
 
+// FindClosestDumps returns the set of dumps that can most accurately answer queries for the given repository, commit, and file.
 func (db *dbImpl) FindClosestDumps(ctx context.Context, repositoryID int, commit, file string) ([]Dump, error) {
 	tw, err := db.beginTx(ctx)
 	if err != nil {
@@ -117,6 +121,8 @@ func deduplicateDumps(allDumps []Dump) (dumps []Dump) {
 	return dumps
 }
 
+// DeleteOldestDump deletes the oldest dump that is not currently visible at the tip of its repository's default branch.
+// This method returns the deleted dump's identifier and a flag indicating its (previous) existence.
 func (db *dbImpl) DeleteOldestDump(ctx context.Context) (int, bool, error) {
 	query := `
 		DELETE FROM lsif_uploads

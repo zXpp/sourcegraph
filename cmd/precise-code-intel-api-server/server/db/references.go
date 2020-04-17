@@ -6,11 +6,17 @@ import (
 	"github.com/keegancsmith/sqlf"
 )
 
+// Reference is a subset of the lsif_references table which links a dump to a package from
+// which it imports. The filter field encodes a bloom filter of the set of identifiers it
+// imports from the package, which can be used to quickly filter out (on the server side)
+// dumps that improt a package but not the target identifier.
 type Reference struct {
 	DumpID int
 	Filter string
 }
 
+// SameRepoPager returns a ReferencePager for dumps that belong to the given repository and commit and reference the package with the
+// given scheme, name, and version.
 func (db *dbImpl) SameRepoPager(ctx context.Context, repositoryID int, commit, scheme, name, version string, limit int) (_ int, _ *ReferencePager, err error) {
 	tw, err := db.beginTx(ctx)
 	if err != nil {
@@ -58,6 +64,9 @@ func (db *dbImpl) SameRepoPager(ctx context.Context, repositoryID int, commit, s
 	return totalCount, newReferencePager(tw.tx, pageFromOffset), nil
 }
 
+// PackageReferencePager returns a ReferencePager for dumps that belong to a remote repository (distinct from the given repository id)
+// and reference the package with the given scheme, name, and version. All resulting dumps are visible at the tip of their repository's
+// default branch.
 func (db *dbImpl) PackageReferencePager(ctx context.Context, scheme, name, version string, repositoryID, limit int) (_ int, _ *ReferencePager, err error) {
 	tw, err := db.beginTx(ctx)
 	if err != nil {

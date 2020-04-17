@@ -13,6 +13,8 @@ import (
 // There should be a nearly-zero delay between these states during normal operation.
 const StalledUploadMaxAge = time.Second * 5
 
+// Upload is a subset of the lsif_uploads table and stores both processed and unprocessed
+// records.
 type Upload struct {
 	ID                int        `json:"id"`
 	Commit            string     `json:"commit"`
@@ -30,6 +32,7 @@ type Upload struct {
 	Rank              *int       `json:"placeInQueue"`
 }
 
+// GetUploadByID returns an upload by its identifier and boolean flag indicating its existence.
 func (db *dbImpl) GetUploadByID(ctx context.Context, id int) (Upload, bool, error) {
 	query := `
 		SELECT
@@ -65,6 +68,7 @@ func (db *dbImpl) GetUploadByID(ctx context.Context, id int) (Upload, bool, erro
 	return upload, true, nil
 }
 
+// GetUploadsByRepo returns a list of uploads for a particular repo and the total count of records matching the given conditions.
 func (db *dbImpl) GetUploadsByRepo(ctx context.Context, repositoryID int, state, term string, visibleAtTip bool, limit, offset int) (_ []Upload, _ int, err error) {
 	tw, err := db.beginTx(ctx)
 	if err != nil {
@@ -144,6 +148,7 @@ func makeSearchCondition(term string) *sqlf.Query {
 	return sqlf.Sprintf("(%s)", sqlf.Join(termConds, " OR "))
 }
 
+// Enqueue inserts a new upload with a "queued" state, returning its identifier and a TxCloser that must be closed to commit the transaction.
 func (db *dbImpl) Enqueue(ctx context.Context, commit, root, tracingContext string, repositoryID int, indexerName string) (_ int, _ TxCloser, err error) {
 	tw, err := db.beginTx(ctx)
 	if err != nil {
@@ -169,15 +174,15 @@ func (db *dbImpl) Enqueue(ctx context.Context, commit, root, tracingContext stri
 	return id, &txCloser{tw.tx}, nil
 }
 
+// GetStates returns the states for the uploads with the given identifiers.
 func (db *dbImpl) GetStates(ctx context.Context, ids []int) (map[int]string, error) {
-	query := `
-		SELECT id, state FROM lsif_uploads
-		WHERE id IN (%s)
-	`
-
+	query := `SELECT id, state FROM lsif_uploads WHERE id IN (%s)`
 	return scanStates(db.query(ctx, sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
 }
 
+// DeleteUploadByID deletes an upload by its identifier. If the upload was visible at the tip of its repository's default branch,
+// the visibility of all uploads for that repository are recalculated. The given function is expected to return the newest commit
+// on the default branch when invoked.
 func (db *dbImpl) DeleteUploadByID(ctx context.Context, id int, getTipCommit func(repositoryID int) (string, error)) (_ bool, err error) {
 	tw, err := db.beginTx(ctx)
 	if err != nil {
@@ -214,6 +219,8 @@ func (db *dbImpl) DeleteUploadByID(ctx context.Context, id int, getTipCommit fun
 	return true, nil
 }
 
+// ResetStalled moves all unlocked uploads processing for more than `StalledUploadMaxAge` back to the queued state.
+// This method returns a list of updated upload identifiers.
 func (db *dbImpl) ResetStalled(ctx context.Context) ([]int, error) {
 	query := `
 		UPDATE lsif_uploads u SET state = 'queued', started_at = null WHERE id = ANY(
