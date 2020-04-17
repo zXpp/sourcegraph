@@ -37,6 +37,7 @@ func (s *ReferencePageResolver) resolvePage(cursor Cursor) (locations []Resolved
 		if err != nil || !hasNewCursor {
 			break
 		}
+		cursor = newCursor
 	}
 
 	return
@@ -177,7 +178,7 @@ func (s *ReferencePageResolver) handleDefinitionMonikersCursor(cursor Cursor) ([
 }
 
 func (s *ReferencePageResolver) handleSameRepoCursor(cursor Cursor) ([]ResolvedLocation, Cursor, bool, error) {
-	locations, newCursor, hasNewCursor, err := s.fooborp(cursor, func() (int, *db.ReferencePager, error) {
+	locations, newCursor, hasNewCursor, err := s.resolveLocationsViaReferencePager(cursor, func() (int, *db.ReferencePager, error) {
 		return s.db.SameRepoPager(context.Background(), s.repositoryID, s.commit, cursor.Scheme, cursor.Name, cursor.Version, s.remoteDumpLimit)
 	})
 	if err != nil || hasNewCursor {
@@ -201,18 +202,12 @@ func (s *ReferencePageResolver) handleSameRepoCursor(cursor Cursor) ([]ResolvedL
 }
 
 func (s *ReferencePageResolver) handleRemoteRepoCursor(cursor Cursor) ([]ResolvedLocation, Cursor, bool, error) {
-	return s.fooborp(cursor, func() (int, *db.ReferencePager, error) {
+	return s.resolveLocationsViaReferencePager(cursor, func() (int, *db.ReferencePager, error) {
 		return s.db.PackageReferencePager(context.Background(), cursor.Scheme, cursor.Name, cursor.Version, s.repositoryID, s.remoteDumpLimit)
 	})
 }
 
-//
-//
-//
-//
-
-// TODO - rename
-func (s *ReferencePageResolver) fooborp(cursor Cursor, q func() (int, *db.ReferencePager, error)) ([]ResolvedLocation, Cursor, bool, error) {
+func (s *ReferencePageResolver) resolveLocationsViaReferencePager(cursor Cursor, q func() (int, *db.ReferencePager, error)) ([]ResolvedLocation, Cursor, bool, error) {
 	dumpID := cursor.DumpID
 	scheme := cursor.Scheme
 	identifier := cursor.Identifier

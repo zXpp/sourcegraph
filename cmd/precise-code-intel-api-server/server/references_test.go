@@ -1,16 +1,92 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/bundles"
 	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 )
 
-func TestReferences(t *testing.T) {
-	// TODO
+func TestReferencesSameDumpPartial(t *testing.T) {
+	dump := db.Dump{ID: 42}
+
+	mockDB := &mockDB{}
+	mockBundleManagerClient := &mockBundleManagerClient{}
+	mockBundleClient := &mockBundleClient{}
+
+	mockDB.getDumpByID = func(ctx context.Context, id int) (db.Dump, bool, error) {
+		if id == 42 {
+			return dump, true, nil
+		}
+		return db.Dump{}, false, nil
+	}
+
+	mockBundleManagerClient.bundleClient = func(bundleID int) bundles.BundleClient {
+		if bundleID != 42 {
+			t.Fatalf("unexpected bundle id %d", bundleID)
+		}
+
+		return mockBundleClient
+	}
+
+	mockBundleClient.references = func(ctx context.Context, path string, line, character int) ([]bundles.Location, error) {
+		// TODO
+		return nil, nil
+	}
+
+	mockBundleClient.monikerResults = func(ctx context.Context, modelType, scheme, identifier string, skip, take int) ([]bundles.Location, int, error) {
+		// TODO
+		return nil, 0, nil
+	}
+
+	s := &Server{
+		db:                  mockDB,
+		bundleManagerClient: mockBundleManagerClient,
+	}
+
+	references, newCursor, hasNewCursor, err := s.references(100, "deadbeef01deadbeef01deadbeef01deadbeef01", 10, Cursor{
+		Phase:     "same-dump",
+		DumpID:    42,
+		Path:      "main.go",
+		Line:      23,
+		Character: 34,
+		Monikers:  nil, // TODO
+	})
+	if err != nil {
+		t.Fatalf("expected error getting references: %s", err)
+	}
+
+	expectedReferences := []ResolvedLocation{
+		// {Dump: dump, Path: "sub/foo.go", Range: r1},
+		// {Dump: dump, Path: "sub/bar.go", Range: r2},
+		// {Dump: dump, Path: "sub/baz.go", Range: r3},
+	}
+
+	expectedNewCursor := Cursor{
+		// TODO
+	}
+
+	if !reflect.DeepEqual(references, expectedReferences) {
+		t.Errorf("unexpected references. want=%v have=%v", expectedReferences, references)
+	}
+	if !hasNewCursor {
+		t.Errorf("expected new cursor")
+	}
+	if !reflect.DeepEqual(newCursor, expectedNewCursor) {
+		t.Errorf("unexpected new cursor. want=%v have=%v", expectedNewCursor, newCursor)
+	}
 }
+
+// TODO: TestReferencesSameDump
+// TODO: TestReferencesDefinitionMonikersPartial
+// TODO: TestReferencesDefinitionMonikers
+// TODO: TestReferencesSameRepoPartial
+// TODO: TestReferencesSameRepo
+// TODO: TestReferencesRemoteRepoPartial
+// TODO: TestReferencesRemoteRepo
 
 func TestApplyBloomFilter(t *testing.T) {
 	references := []db.Reference{

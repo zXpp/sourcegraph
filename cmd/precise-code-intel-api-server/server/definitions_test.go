@@ -68,7 +68,7 @@ func TestDefinitions(t *testing.T) {
 
 	definitions, err := s.definitions("sub/main.go", 10, 50, 42)
 	if err != nil {
-		t.Fatalf("expected error getting hover text: %s", err)
+		t.Fatalf("expected error getting definitions: %s", err)
 	}
 
 	expectedDefinitions := []ResolvedLocation{
@@ -96,7 +96,7 @@ func TestDefinitionsUnknownDump(t *testing.T) {
 
 	_, err := s.definitions("sub/main.go", 10, 50, 25)
 	if err != ErrMissingDump {
-		t.Errorf("unexpected error getting hover text. want=%v have=%v", ErrMissingDump, err)
+		t.Errorf("unexpected error getting definitions. want=%v have=%v", ErrMissingDump, err)
 	}
 }
 
@@ -192,7 +192,7 @@ func TestDefinitionViaSameDumpMoniker(t *testing.T) {
 
 	definitions, err := s.definitions("sub/main.go", 10, 50, 42)
 	if err != nil {
-		t.Fatalf("expected error getting hover text: %s", err)
+		t.Fatalf("expected error getting definitions: %s", err)
 	}
 
 	expectedDefinitions := []ResolvedLocation{
@@ -325,7 +325,7 @@ func TestDefinitionViaRemoteDumpMoniker(t *testing.T) {
 
 	definitions, err := s.definitions("sub1/main.go", 10, 50, 42)
 	if err != nil {
-		t.Fatalf("expected error getting hover text: %s", err)
+		t.Fatalf("expected error getting definitions: %s", err)
 	}
 
 	expectedDefinitions := []ResolvedLocation{
