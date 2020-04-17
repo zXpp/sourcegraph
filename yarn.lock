@@ -2015,8 +2015,7 @@
   integrity sha512-KWxkyphmlwam8kfYPSmoitKQRMGQCsr1ZRmNZgijT7ABKaVyk/+I5ezt2J213tM04Hi0vyg4L7iH1VCkNvm2Jw==
 
 "@sourcegraph/extension-api-types@link:packages/@sourcegraph/extension-api-types":
-  version "0.0.0"
-  uid ""
+  version "2.1.0"
 
 "@sourcegraph/prettierrc@^3.0.3":
   version "3.0.3"
@@ -13515,10 +13514,10 @@ mdast-util-compact@^1.0.0:
   dependencies:
     unist-util-visit "^1.1.0"
 
-mdi-react@^6.7.0:
-  version "6.7.0"
-  resolved "https://registry.npmjs.org/mdi-react/-/mdi-react-6.7.0.tgz#d291f919b5f0f99cbbeac111f2c9ca5184607b6b"
-  integrity sha512-Xpl3bXh4Nmuufoll8ejtErsDd0v/Ty+Je+qC9V3owriFUQZno91F/f0CkAdQj9fRqWY+LwjhFcWii+3lFFGKvQ==
+mdi-react@^7.1.0:
+  version "7.1.0"
+  resolved "https://registry.npmjs.org/mdi-react/-/mdi-react-7.1.0.tgz#fc958992de611c76cb39629928aab477a1524439"
+  integrity sha512-/ncGCDAMcNWsSmM5hpr4g63NKHwaRkcKS2zgvRA+WjRX0qLjo7aHLl/LY9xOpZ1BLp7epXXrvDxQYLVq2wJIkw==
 
 mdn-browser-compat-data@1.0.3:
   version "1.0.3"
@@ -18730,8 +18729,7 @@ source-map@^0.7.3:
   integrity sha512-CkCj6giN3S+n9qrYiBTX5gystlENnRW5jZeNLHpe6aue+SrHcG5VYwujhW9s4dY31mEGsxBDrHR6oI69fTXsaQ==
 
 "sourcegraph@link:packages/sourcegraph-extension-api":
-  version "0.0.0"
-  uid ""
+  version "24.0.0"
 
 space-separated-tokens@^1.0.0:
   version "1.1.2"
