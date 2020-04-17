@@ -21,7 +21,7 @@ type ReferenceModel struct {
 	Name    string
 	Version string
 	DumpID  int
-	Filter  string
+	Filter  []byte
 }
 
 // insertUploads populates the lsif_uploads table with the given upload models.

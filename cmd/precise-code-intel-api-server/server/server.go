@@ -272,7 +272,7 @@ func (s *Server) handleReferences(w http.ResponseWriter, r *http.Request) {
 	commit := q.Get("commit")
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	cursor, err := decodeCursorFromRequest(r, s.db, s.bundleManagerClient)
+	cursor, err := decodeCursorFromRequest(q, s.db, s.bundleManagerClient)
 	if err != nil {
 		if err == ErrMissingDump {
 			http.Error(w, "no such dump", http.StatusNotFound)

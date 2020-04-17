@@ -34,18 +34,10 @@ func TestTestTypeScriptGeneratedBloomFilters(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		t.Run(testCase.filterFile, func(t *testing.T) {
-			content, err := ioutil.ReadFile(fmt.Sprintf("test-data/filters/%s", testCase.filterFile))
-			if err != nil {
-				t.Fatalf("unexpected error reading: %s", err)
-			}
+		name := fmt.Sprintf("filter=%s", testCase.filterFile)
 
-			raw, err := hex.DecodeString(strings.TrimSpace(string(content)))
-			if err != nil {
-				t.Fatalf("unexpected error decoding: %s", err)
-			}
-
-			buckets, m, k, err := decodeFilter(raw)
+		t.Run(name, func(t *testing.T) {
+			buckets, m, k, err := decodeFilter(readTestFilter(t, testCase.filterFile))
 			if err != nil {
 				t.Fatalf("unexpected error decoding filter: %s", err)
 			}
@@ -63,6 +55,20 @@ func TestTestTypeScriptGeneratedBloomFilters(t *testing.T) {
 			}
 		})
 	}
+}
+
+func readTestFilter(t *testing.T, filename string) []byte {
+	content, err := ioutil.ReadFile(fmt.Sprintf("test-data/filters/%s", filename))
+	if err != nil {
+		t.Fatalf("unexpected error reading: %s", err)
+	}
+
+	raw, err := hex.DecodeString(strings.TrimSpace(string(content)))
+	if err != nil {
+		t.Fatalf("unexpected error decoding: %s", err)
+	}
+
+	return raw
 }
 
 func readTestWords(t *testing.T, filename string) []string {

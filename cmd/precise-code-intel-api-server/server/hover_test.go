@@ -30,7 +30,7 @@ func TestHover(t *testing.T) {
 
 	mockBundleManagerClient.bundleClient = func(bundleID int) bundles.BundleClient {
 		if bundleID != 42 {
-			t.Errorf("unexpected bundleID. want=%v have=%v", 42, bundleID)
+			t.Errorf("unexpected bundle id. want=%v have=%v", 42, bundleID)
 		}
 		return mockBundleClient
 	}

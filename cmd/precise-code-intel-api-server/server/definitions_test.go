@@ -38,7 +38,7 @@ func TestDefinitions(t *testing.T) {
 
 	mockBundleManagerClient.bundleClient = func(bundleID int) bundles.BundleClient {
 		if bundleID != 42 {
-			t.Errorf("unexpected bundleID. want=%v have=%v", 42, bundleID)
+			t.Errorf("unexpected bundle id. want=%v have=%v", 42, bundleID)
 		}
 		return mockBundleClient
 	}
@@ -129,7 +129,7 @@ func TestDefinitionViaSameDumpMoniker(t *testing.T) {
 
 	mockBundleManagerClient.bundleClient = func(bundleID int) bundles.BundleClient {
 		if bundleID != 42 {
-			t.Errorf("unexpected bundleID. want=%v have=%v", 42, bundleID)
+			t.Errorf("unexpected bundle id. want=%v have=%v", 42, bundleID)
 		}
 		return mockBundleClient
 	}
@@ -275,7 +275,7 @@ func TestDefinitionViaRemoteDumpMoniker(t *testing.T) {
 			t.Errorf("unexpected path. want=%v have=%v", "main.go", path)
 		}
 		if packageInformationID != "1234" {
-			t.Errorf("unexpected package information ID. want=%v have=%v", "1234", packageInformationID)
+			t.Errorf("unexpected package information id. want=%v have=%v", "1234", packageInformationID)
 		}
 		return bundles.PackageInformationData{Name: "leftpad", Version: "0.1.0"}, nil
 	}

@@ -12,7 +12,7 @@ import (
 // dumps that improt a package but not the target identifier.
 type Reference struct {
 	DumpID int
-	Filter string
+	Filter []byte
 }
 
 // SameRepoPager returns a ReferencePager for dumps that belong to the given repository and commit and reference the package with the

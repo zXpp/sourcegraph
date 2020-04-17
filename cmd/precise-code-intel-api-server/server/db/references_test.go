@@ -25,11 +25,11 @@ func TestSameRepoPager(t *testing.T) {
 	)
 
 	insertReferences(t, db.db,
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: "f1"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: "f2"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: "f3"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: "f4"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: "f5"},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: []byte("f1")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: []byte("f2")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: []byte("f3")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: []byte("f4")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: []byte("f5")},
 	)
 
 	insertCommits(t, db.db, map[string][]string{
@@ -50,11 +50,11 @@ func TestSameRepoPager(t *testing.T) {
 	}
 
 	expected := []Reference{
-		{DumpID: 1, Filter: "f1"},
-		{DumpID: 2, Filter: "f2"},
-		{DumpID: 3, Filter: "f3"},
-		{DumpID: 4, Filter: "f4"},
-		{DumpID: 5, Filter: "f5"},
+		{DumpID: 1, Filter: []byte("f1")},
+		{DumpID: 2, Filter: []byte("f2")},
+		{DumpID: 3, Filter: []byte("f3")},
+		{DumpID: 4, Filter: []byte("f4")},
+		{DumpID: 5, Filter: []byte("f5")},
 	}
 
 	if references, err := pager.PageFromOffset(0); err != nil {
@@ -102,17 +102,18 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 	)
 
 	insertReferences(t, db.db,
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: "f1"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: "f2"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: "f3"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: "f4"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: "f5"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 6, Filter: "f6"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 7, Filter: "f7"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 8, Filter: "f8"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 9, Filter: "f9"},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: []byte("f1")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: []byte("f2")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: []byte("f3")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: []byte("f4")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: []byte("f5")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 6, Filter: []byte("f6")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 7, Filter: []byte("f7")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 8, Filter: []byte("f8")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 9, Filter: []byte("f9")},
 	)
 
+	// TODO - search for deadbeef
 	insertCommits(t, db.db, map[string][]string{
 		"deadbeef01deadbeef02deadbeef03deadbeef04": {},
 	})
@@ -128,15 +129,15 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 	}
 
 	expected := []Reference{
-		{DumpID: 1, Filter: "f1"},
-		{DumpID: 2, Filter: "f2"},
-		{DumpID: 3, Filter: "f3"},
-		{DumpID: 4, Filter: "f4"},
-		{DumpID: 5, Filter: "f5"},
-		{DumpID: 6, Filter: "f6"},
-		{DumpID: 7, Filter: "f7"},
-		{DumpID: 8, Filter: "f8"},
-		{DumpID: 9, Filter: "f9"},
+		{DumpID: 1, Filter: []byte("f1")},
+		{DumpID: 2, Filter: []byte("f2")},
+		{DumpID: 3, Filter: []byte("f3")},
+		{DumpID: 4, Filter: []byte("f4")},
+		{DumpID: 5, Filter: []byte("f5")},
+		{DumpID: 6, Filter: []byte("f6")},
+		{DumpID: 7, Filter: []byte("f7")},
+		{DumpID: 8, Filter: []byte("f8")},
+		{DumpID: 9, Filter: []byte("f9")},
 	}
 
 	for lo := 0; lo < len(expected); lo++ {
@@ -169,11 +170,11 @@ func TestSameRepoPagerVisibility(t *testing.T) {
 	)
 
 	insertReferences(t, db.db,
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: "f1"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: "f2"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: "f3"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: "f4"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: "f5"},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: []byte("f1")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: []byte("f2")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: []byte("f3")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: []byte("f4")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: []byte("f5")},
 	)
 
 	insertCommits(t, db.db, map[string][]string{
@@ -196,9 +197,9 @@ func TestSameRepoPagerVisibility(t *testing.T) {
 	}
 
 	expected := []Reference{
-		{DumpID: 3, Filter: "f3"},
-		{DumpID: 4, Filter: "f4"},
-		{DumpID: 5, Filter: "f5"},
+		{DumpID: 3, Filter: []byte("f3")},
+		{DumpID: 4, Filter: []byte("f4")},
+		{DumpID: 5, Filter: []byte("f5")},
 	}
 
 	if references, err := pager.PageFromOffset(0); err != nil {
@@ -226,13 +227,13 @@ func TestPackageReferencePager(t *testing.T) {
 	)
 
 	insertReferences(t, db.db,
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: "f1"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: "f2"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: "f3"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: "f4"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: "f5"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 6, Filter: "f6"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 7, Filter: "f7"},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: []byte("f1")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: []byte("f2")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: []byte("f3")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: []byte("f4")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: []byte("f5")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 6, Filter: []byte("f6")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 7, Filter: []byte("f7")},
 	)
 
 	totalCount, pager, err := db.PackageReferencePager(context.Background(), "gomod", "leftpad", "0.1.0", 50, 5)
@@ -246,11 +247,11 @@ func TestPackageReferencePager(t *testing.T) {
 	}
 
 	expected := []Reference{
-		{DumpID: 2, Filter: "f2"},
-		{DumpID: 3, Filter: "f3"},
-		{DumpID: 4, Filter: "f4"},
-		{DumpID: 5, Filter: "f5"},
-		{DumpID: 7, Filter: "f7"},
+		{DumpID: 2, Filter: []byte("f2")},
+		{DumpID: 3, Filter: []byte("f3")},
+		{DumpID: 4, Filter: []byte("f4")},
+		{DumpID: 5, Filter: []byte("f5")},
+		{DumpID: 7, Filter: []byte("f7")},
 	}
 
 	if references, err := pager.PageFromOffset(0); err != nil {
@@ -298,15 +299,15 @@ func TestPackageReferencePagerPages(t *testing.T) {
 	)
 
 	insertReferences(t, db.db,
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: "f1"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: "f2"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: "f3"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: "f4"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: "f5"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 6, Filter: "f6"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 7, Filter: "f7"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 8, Filter: "f8"},
-		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 9, Filter: "f9"},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 1, Filter: []byte("f1")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 2, Filter: []byte("f2")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 3, Filter: []byte("f3")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 4, Filter: []byte("f4")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 5, Filter: []byte("f5")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 6, Filter: []byte("f6")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 7, Filter: []byte("f7")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 8, Filter: []byte("f8")},
+		ReferenceModel{Scheme: "gomod", Name: "leftpad", Version: "0.1.0", DumpID: 9, Filter: []byte("f9")},
 	)
 
 	totalCount, pager, err := db.PackageReferencePager(context.Background(), "gomod", "leftpad", "0.1.0", 50, 3)
@@ -336,15 +337,15 @@ func TestPackageReferencePagerPages(t *testing.T) {
 	}
 
 	expected := []Reference{
-		{DumpID: 1, Filter: "f1"},
-		{DumpID: 2, Filter: "f2"},
-		{DumpID: 3, Filter: "f3"},
-		{DumpID: 4, Filter: "f4"},
-		{DumpID: 5, Filter: "f5"},
-		{DumpID: 6, Filter: "f6"},
-		{DumpID: 7, Filter: "f7"},
-		{DumpID: 8, Filter: "f8"},
-		{DumpID: 9, Filter: "f9"},
+		{DumpID: 1, Filter: []byte("f1")},
+		{DumpID: 2, Filter: []byte("f2")},
+		{DumpID: 3, Filter: []byte("f3")},
+		{DumpID: 4, Filter: []byte("f4")},
+		{DumpID: 5, Filter: []byte("f5")},
+		{DumpID: 6, Filter: []byte("f6")},
+		{DumpID: 7, Filter: []byte("f7")},
+		{DumpID: 8, Filter: []byte("f8")},
+		{DumpID: 9, Filter: []byte("f9")},
 	}
 
 	for _, testCase := range testCases {

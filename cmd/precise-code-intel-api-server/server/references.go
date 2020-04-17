@@ -314,3 +314,21 @@ func (s *ReferencePageResolver) fooborp(cursor Cursor, q func() (int, *db.Refere
 
 	return nil, Cursor{}, false, nil
 }
+
+func applyBloomFilter(refs []db.Reference, identifier string, limit int) ([]db.Reference, int) {
+	var filteredReferences []db.Reference
+	for i, ref := range refs {
+		test, err := decodeAndTestFilter([]byte(ref.Filter), identifier)
+		if err != nil || !test {
+			continue
+		}
+
+		filteredReferences = append(filteredReferences, ref)
+
+		if len(filteredReferences) >= limit {
+			return filteredReferences, i + 1
+		}
+	}
+
+	return filteredReferences, len(refs)
+}

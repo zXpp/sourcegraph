@@ -7,30 +7,16 @@ import (
 	"io/ioutil"
 	"math"
 	"unicode/utf16"
-
-	"github.com/sourcegraph/sourcegraph/cmd/precise-code-intel-api-server/server/db"
 )
 
-func applyBloomFilter(refs []db.Reference, identifier string, limit int) ([]db.Reference, int) {
-	var filtered []db.Reference
-	for i, ref := range refs {
-		buckets, m, k, err := decodeFilter([]byte(ref.Filter)) // TODO - should be bytes in db?
-		if err != nil {
-			continue
-		}
-
-		if !test(identifier, buckets, m, k) {
-			continue
-		}
-
-		filtered = append(filtered, ref)
-
-		if len(filtered) >= limit {
-			return filtered, i + 1
-		}
+// TODO - collapse the below
+func decodeAndTestFilter(encodedFilter []byte, identifier string) (bool, error) {
+	buckets, m, k, err := decodeFilter(encodedFilter)
+	if err != nil {
+		return false, err
 	}
 
-	return filtered, len(refs)
+	return test(identifier, buckets, m, k), nil
 }
 
 func decodeFilter(encodedFilter []byte) ([]int, int, int, error) {
@@ -53,12 +39,8 @@ func decodeFilter(encodedFilter []byte) ([]int, int, int, error) {
 		return nil, 0, 0, err
 	}
 
-	return payload.Buckets, makeBloomFilter(payload.Buckets), payload.NumHashFunctions, nil
-}
-
-// TODO - hate this, don't understand why m is chosen
-func makeBloomFilter(a []int) int {
-	return int(math.Ceil(float64(len(a)*32)/32) * 32)
+	m := int(math.Ceil(float64(len(payload.Buckets)*32)/32) * 32)
+	return payload.Buckets, m, payload.NumHashFunctions, nil
 }
 
 // TODO - rename

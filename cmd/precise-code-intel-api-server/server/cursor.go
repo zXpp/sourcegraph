@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -46,16 +46,8 @@ func encodeCursor(cursor Cursor) string {
 	return base64.RawURLEncoding.EncodeToString(rawEncoded)
 }
 
-// TODO - test
-func decodeCursorFromRequest(r *http.Request, db db.DB, bundleManagerClient bundles.BundleManagerClient) (Cursor, error) {
-	q := r.URL.Query()
-	file := q.Get("path")
-	line, _ := strconv.Atoi(q.Get("line"))
-	character, _ := strconv.Atoi(q.Get("character"))
-	uploadID, _ := strconv.Atoi(q.Get("uploadId"))
-	encoded := q.Get("cursor")
-
-	if encoded != "" {
+func decodeCursorFromRequest(query url.Values, db db.DB, bundleManagerClient bundles.BundleManagerClient) (Cursor, error) {
+	if encoded := query.Get("cursor"); encoded != "" {
 		cursor, err := decodeCursor(encoded)
 		if err != nil {
 			return Cursor{}, err
@@ -63,6 +55,11 @@ func decodeCursorFromRequest(r *http.Request, db db.DB, bundleManagerClient bund
 
 		return cursor, nil
 	}
+
+	file := query.Get("path")
+	line, _ := strconv.Atoi(query.Get("line"))
+	character, _ := strconv.Atoi(query.Get("character"))
+	uploadID, _ := strconv.Atoi(query.Get("uploadId"))
 
 	dump, exists, err := db.GetDumpByID(context.Background(), uploadID)
 	if err != nil {
