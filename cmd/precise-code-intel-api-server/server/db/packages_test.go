@@ -108,7 +108,7 @@ func TestSameRepoPager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.CloseTx(nil)
+	defer func() { _ = pager.CloseTx(nil) }()
 
 	if totalCount != 5 {
 		t.Errorf("unexpected dump. want=%v have=%v", 5, totalCount)
@@ -140,7 +140,7 @@ func TestSameRepoPagerEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.CloseTx(nil)
+	defer func() { _ = pager.CloseTx(nil) }()
 
 	if totalCount != 0 {
 		t.Errorf("unexpected dump. want=%v have=%v", 0, totalCount)
@@ -186,7 +186,7 @@ func TestSameRepoPagerMultiplePages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.CloseTx(nil)
+	defer func() { _ = pager.CloseTx(nil) }()
 
 	if totalCount != 9 {
 		t.Errorf("unexpected dump. want=%v have=%v", 9, totalCount)
@@ -249,7 +249,7 @@ func TestPackageReferencePager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.CloseTx(nil)
+	defer func() { _ = pager.CloseTx(nil) }()
 
 	if totalCount != 5 {
 		t.Errorf("unexpected dump. want=%v have=%v", 5, totalCount)
@@ -281,7 +281,7 @@ func TestPackageReferencePagerEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.CloseTx(nil)
+	defer func() { _ = pager.CloseTx(nil) }()
 
 	if totalCount != 0 {
 		t.Errorf("unexpected dump. want=%v have=%v", 0, totalCount)
@@ -323,7 +323,7 @@ func TestPackageReferencePagerPages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error getting pager: %s", err)
 	}
-	defer pager.CloseTx(nil)
+	defer func() { _ = pager.CloseTx(nil) }()
 
 	if totalCount != 9 {
 		t.Errorf("unexpected dump. want=%v have=%v", 9, totalCount)

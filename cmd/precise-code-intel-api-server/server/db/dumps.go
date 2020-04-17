@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"github.com/keegancsmith/sqlf"
@@ -26,27 +25,8 @@ type Dump struct {
 	// ProcessedAt       time.Time  `json:"processedAt"`
 }
 
-func scanDump(scanner Scanner) (dump Dump, err error) {
-	err = scanner.Scan(
-		&dump.ID,
-		&dump.Commit,
-		&dump.Root,
-		&dump.VisibleAtTip,
-		&dump.UploadedAt,
-		&dump.State,
-		&dump.FailureSummary,
-		&dump.FailureStacktrace,
-		&dump.StartedAt,
-		&dump.FinishedAt,
-		&dump.TracingContext,
-		&dump.RepositoryID,
-		&dump.Indexer,
-	)
-	return
-}
-
 func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
-	query := sqlf.Sprintf(`
+	query := `
 		SELECT
 			u.id,
 			u.commit,
@@ -62,77 +42,56 @@ func (db *dbImpl) GetDumpByID(id int) (Dump, bool, error) {
 			u.repository_id,
 			u.indexer
 		FROM lsif_uploads u WHERE id = %d
-	`, id) // TODO - should ensure state as well?
+	`
 
-	dump, err := scanDump(db.db.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...))
+	// TODO - should ensure state as well?
+	dump, err := scanDump(db.queryRow(context.Background(), sqlf.Sprintf(query, id)))
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return Dump{}, false, nil
-		}
-		return Dump{}, false, err
+		return Dump{}, false, ignoreNoRows(err)
 	}
 
 	return dump, true, nil
 }
 
 func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dump, error) {
-	query := "WITH " + bidirectionalLineage + ", " + visibleDumps + `
+	visibleIDsQuery := `
 		SELECT d.dump_id FROM lineage_with_dumps d
-		WHERE $3 LIKE (d.root || '%') AND d.dump_id IN (SELECT * FROM visible_ids)
+		WHERE %s LIKE (d.root || '%%%%') AND d.dump_id IN (SELECT * FROM visible_ids)
 		ORDER BY d.n
 	`
-	rows, err := db.db.QueryContext(context.Background(), query, repositoryID, commit, file)
+
+	ids, err := scanInts(db.query(context.Background(), withBidirectionalLineage(visibleIDsQuery, repositoryID, commit, file)))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var qs []*sqlf.Query
-	for rows.Next() {
-		id, err := scanInt(rows)
-		if err != nil {
-			return nil, err
-		}
-
-		qs = append(qs, sqlf.Sprintf("%d", id))
-	}
-
-	if len(qs) == 0 {
+	if len(ids) == 0 {
 		return nil, nil
 	}
 
-	// TODO - completed condition?
-	query2 := sqlf.Sprintf(`SELECT
-		u.id,
-		u.commit,
-		u.root,
-		u.visible_at_tip,
-		u.uploaded_at,
-		u.state,
-		u.failure_summary,
-		u.failure_stacktrace,
-		u.started_at,
-		u.finished_at,
-		u.tracing_context,
-		u.repository_id,
-		u.indexer
-	FROM lsif_uploads u WHERE id IN (%s)`, sqlf.Join(qs, ", "))
+	// TODO - completed condition
+	query := `
+		SELECT
+			u.id,
+			u.commit,
+			u.root,
+			u.visible_at_tip,
+			u.uploaded_at,
+			u.state,
+			u.failure_summary,
+			u.failure_stacktrace,
+			u.started_at,
+			u.finished_at,
+			u.tracing_context,
+			u.repository_id,
+			u.indexer
+		FROM lsif_uploads u WHERE id IN (%s)
+	`
 
-	rows2, err := db.db.QueryContext(context.Background(), query2.Query(sqlf.PostgresBindVar), query2.Args()...)
+	// TODO - transaction
+	dumps, err := scanDumps(db.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
 	if err != nil {
 		return nil, err
-	}
-	defer rows2.Close()
-
-	var dumps []Dump
-	for rows2.Next() {
-		dump, err := scanDump(rows2)
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO - need to de-duplicate
-		dumps = append(dumps, dump)
 	}
 
 	return dumps, nil
@@ -140,16 +99,20 @@ func (db *dbImpl) FindClosestDumps(repositoryID int, commit, file string) ([]Dum
 
 // TODO - rename
 func (db *dbImpl) DoPrune() (int, bool, error) {
-	// TODO - should only be completed
-	query := "DELETE FROM lsif_uploads WHERE ctid IN (SELECT ctid FROM lsif_uploads WHERE visible_at_tip = false ORDER BY uploaded_at LIMIT 1) RETURNING id"
+	// TODO - should only be completed (all methods in this file)
+	query := `
+		DELETE FROM lsif_uploads
+		WHERE ctid IN (
+			SELECT ctid FROM lsif_uploads
+			WHERE visible_at_tip = false
+			ORDER BY uploaded_at
+			LIMIT 1
+		) RETURNING id
+	`
 
-	id, err := scanInt(db.db.QueryRowContext(context.Background(), query))
+	id, err := scanInt(db.queryRow(context.Background(), sqlf.Sprintf(query)))
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return 0, false, nil
-		}
-
-		return 0, false, err
+		return 0, false, ignoreNoRows(err)
 	}
 
 	return id, true, nil

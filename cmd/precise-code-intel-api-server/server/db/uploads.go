@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"github.com/keegancsmith/sqlf"
@@ -29,28 +28,8 @@ type Upload struct {
 	// ProcessedAt       time.Time  `json:"processedAt"`
 }
 
-func scanUpload(scanner Scanner) (upload Upload, err error) {
-	err = scanner.Scan(
-		&upload.ID,
-		&upload.Commit,
-		&upload.Root,
-		&upload.VisibleAtTip,
-		&upload.UploadedAt,
-		&upload.State,
-		&upload.FailureSummary,
-		&upload.FailureStacktrace,
-		&upload.StartedAt,
-		&upload.FinishedAt,
-		&upload.TracingContext,
-		&upload.RepositoryID,
-		&upload.Indexer,
-		&upload.Rank,
-	)
-	return
-}
-
 func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
-	query := sqlf.Sprintf(`
+	query := `
 		SELECT
 			u.id,
 			u.commit,
@@ -74,20 +53,18 @@ func (db *dbImpl) GetUploadByID(id int) (Upload, bool, error) {
 		) s
 		ON u.id = s.id
 		WHERE u.id = %s
-	`, id)
+	`
 
-	upload, err := scanUpload(db.db.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...))
+	upload, err := scanUpload(db.queryRow(context.Background(), sqlf.Sprintf(query, id)))
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return Upload{}, false, nil
-		}
-
-		return Upload{}, false, err
+		return Upload{}, false, ignoreNoRows(err)
 	}
 
 	return upload, true, nil
 }
 
+// TODO - do this transactionally
+// TODO - rewrite this logic to be nicer
 func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visibleAtTip bool, limit, offset int) ([]Upload, int, error) {
 	conds := []*sqlf.Query{
 		sqlf.Sprintf("u.repository_id = %s", repositoryID),
@@ -107,7 +84,7 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 		conds = append(conds, sqlf.Sprintf("visible_at_tip = true"))
 	}
 
-	query := sqlf.Sprintf(`
+	query := `
 		SELECT
 			u.id,
 			u.commit,
@@ -132,27 +109,19 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 		ON u.id = s.id
 		WHERE %s
 		ORDER BY uploaded_at DESC LIMIT %d OFFSET %d
-	`, sqlf.Join(conds, " AND "), limit, offset)
+	`
 
-	rows, err := db.db.QueryContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...)
+	uploads, err := scanUploads(db.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(conds, " AND "), limit, offset)))
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
 
-	var uploads []Upload
-	for rows.Next() {
-		upload, err := scanUpload(rows)
-		if err != nil {
-			return nil, 0, err
-		}
+	countQuery := `
+		SELECT COUNT(1) FROM lsif_uploads u
+		WHERE %s
+	`
 
-		uploads = append(uploads, upload)
-	}
-
-	// TODO - do this transactionally
-	countQuery := sqlf.Sprintf("SELECT COUNT(1) FROM lsif_uploads u WHERE %s", sqlf.Join(conds, " AND "))
-	count, err := scanInt(db.db.QueryRowContext(context.Background(), countQuery.Query(sqlf.PostgresBindVar), countQuery.Args()...))
+	count, err := scanInt(db.queryRow(context.Background(), sqlf.Sprintf(countQuery, sqlf.Join(conds, " AND "))))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -160,138 +129,114 @@ func (db *dbImpl) GetUploadsByRepo(repositoryID int, state, term string, visible
 	return uploads, count, nil
 }
 
-func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string) (int, TxCloser, error) {
-	tx, err := db.db.BeginTx(context.Background(), nil)
+func (db *dbImpl) Enqueue(commit, root, tracingContext string, repositoryID int, indexerName string) (_ int, _ TxCloser, err error) {
+	tw, err := db.beginTx(context.Background())
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() {
+		if err != nil {
+			err = closeTx(tw.tx, err)
+		}
+	}()
+
+	query := `
+		INSERT INTO lsif_uploads (commit, root, tracing_context, repository_id, indexer)
+		VALUES (%s, %s, %s, %s, %s)
+		RETURNING id
+	`
+
+	id, err := scanInt(tw.queryRow(context.Background(), sqlf.Sprintf(query, commit, root, tracingContext, repositoryID, indexerName)))
 	if err != nil {
 		return 0, nil, err
 	}
 
-	query := sqlf.Sprintf(
-		`INSERT INTO lsif_uploads (commit, root, tracing_context, repository_id, indexer) VALUES (%s, %s, %s, %s, %s) RETURNING id`,
-		commit, root, tracingContext, repositoryID, indexerName,
-	)
-
-	id, err := scanInt(tx.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...))
-	if err != nil {
-		return 0, nil, closeTx(tx, err)
-	}
-
-	return id, &txCloser{tx}, nil
+	return id, &txCloser{tw.tx}, nil
 }
 
 func (db *dbImpl) GetStates(ids []int) (map[int]string, error) {
-	var qs []*sqlf.Query
-	for _, id := range ids {
-		qs = append(qs, sqlf.Sprintf("%d", id))
-	}
+	query := `
+		SELECT id, state FROM lsif_uploads
+		WHERE id IN (%s)
+	`
 
-	query := sqlf.Sprintf("SELECT id, state FROM lsif_uploads WHERE id IN (%s)", sqlf.Join(qs, ", "))
-
-	rows, err := db.db.QueryContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	states := map[int]string{}
-	for rows.Next() {
-		var id int
-		var state string
-		if err := rows.Scan(&id, &state); err != nil {
-			return nil, err
-		}
-
-		states[id] = state
-	}
-
-	return states, nil
+	return scanStates(db.query(context.Background(), sqlf.Sprintf(query, sqlf.Join(intsToQueries(ids), ", "))))
 }
 
-func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (string, error)) (found bool, err error) {
-	tx, err := db.db.BeginTx(context.Background(), nil)
+func (db *dbImpl) DeleteUploadByID(id int, getTipCommit func(repositoryID int) (string, error)) (_ bool, err error) {
+	tw, err := db.beginTx(context.Background())
 	if err != nil {
 		return false, err
 	}
 	defer func() {
-		err = closeTx(tx, err)
+		err = closeTx(tw.tx, err)
 	}()
 
-	query := sqlf.Sprintf("DELETE FROM lsif_uploads WHERE id = %s RETURNING repository_id, visible_at_tip", id)
+	query := `
+		DELETE FROM lsif_uploads
+		WHERE id = %s
+		RETURNING repository_id, visible_at_tip
+	`
 
-	var repositoryID int
-	var visibleAtTip bool
-	if err = tx.QueryRowContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...).Scan(&repositoryID, &visibleAtTip); err != nil {
-		if err == sql.ErrNoRows {
-			return false, nil
-		}
+	repositoryID, visibleAtTip, err := scanVisibility(tw.queryRow(context.Background(), sqlf.Sprintf(query, id)))
+	if err != nil {
+		return false, ignoreNoRows(err)
+	}
 
+	if !visibleAtTip {
+		return true, nil
+	}
+
+	tipCommit, err := getTipCommit(repositoryID)
+	if err != nil {
 		return false, err
 	}
 
-	found = true
-	if !visibleAtTip {
-		return
+	if err := db.updateDumpsVisibleFromTip(tw, repositoryID, tipCommit); err != nil {
+		return false, err
 	}
 
-	var tipCommit string
-	tipCommit, err = getTipCommit(repositoryID)
-	if err != nil {
-		return
-	}
-
-	err = db.updateDumpsVisibleFromTip(tx, repositoryID, tipCommit)
-	return
+	return true, nil
 }
 
-func (db *dbImpl) updateDumpsVisibleFromTip(tx *sql.Tx, repositoryID int, tipCommit string) (err error) {
-	if tx == nil {
-		tx, err = db.db.BeginTx(context.Background(), nil)
+// TODO  should be in dumps.go?
+func (db *dbImpl) updateDumpsVisibleFromTip(tw *transactionWrapper, repositoryID int, tipCommit string) (err error) {
+	if tw == nil {
+		tw, err = db.beginTx(context.Background())
 		if err != nil {
 			return
 		}
-
 		defer func() {
-			err = closeTx(tx, err)
+			err = closeTx(tw.tx, err)
 		}()
 	}
 
-	query2 := "WITH " + ancestorLineage + ", " + visibleDumps + `
-		-- Update dump records by:
-		--   (1) unsetting the visibility flag of all previously visible dumps, and
-		--   (2) setting the visibility flag of all currently visible dumps
+	// Update dump records by:
+	//   (1) unsetting the visibility flag of all previously visible dumps, and
+	//   (2) setting the visibility flag of all currently visible dumps
+	query := `
 		UPDATE lsif_dumps d
 		SET visible_at_tip = id IN (SELECT * from visible_ids)
-		WHERE d.repository_id = $1 AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
+		WHERE d.repository_id = %s AND (d.id IN (SELECT * from visible_ids) OR d.visible_at_tip)
 	`
 
-	_, err = tx.ExecContext(context.Background(), query2, repositoryID, tipCommit)
+	_, err = tw.exec(context.Background(), withAncestorLineage(query, repositoryID, tipCommit, repositoryID))
 	return
 }
 
 func (db *dbImpl) ResetStalled() ([]int, error) {
-	query := sqlf.Sprintf(`
+	query := `
 		UPDATE lsif_uploads u SET state = 'queued', started_at = null WHERE id = ANY(
 			SELECT id FROM lsif_uploads
 			WHERE state = 'processing' AND started_at < now() - (%s * interval '1 second')
 			FOR UPDATE SKIP LOCKED
 		)
 		RETURNING u.id
-	`, StalledUploadMaxAge/time.Second)
+	`
 
-	rows, err := db.db.QueryContext(context.Background(), query.Query(sqlf.PostgresBindVar), query.Args()...)
+	ids, err := scanInts(db.query(context.Background(), sqlf.Sprintf(query, StalledUploadMaxAge/time.Second)))
 	if err != nil {
 		return nil, err
-	}
-	defer rows.Close()
-
-	var ids []int
-	for rows.Next() {
-		id, err := scanInt(rows)
-		if err != nil {
-			return nil, err
-		}
-
-		ids = append(ids, id)
 	}
 
 	return ids, nil

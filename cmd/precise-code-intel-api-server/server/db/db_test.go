@@ -145,25 +145,13 @@ func insertCommits(t *testing.T, db *sql.DB, commits map[string][]string) {
 	}
 }
 
-func getDumpVisibility(t *testing.T, db *sql.DB) map[int]bool {
-	rows, err := db.Query("SELECT id, visible_at_tip FROM lsif_uploads")
+func getDumpVisibilities(t *testing.T, db *sql.DB) map[int]bool {
+	visibilities, err := scanVisibilities(db.Query("SELECT id, visible_at_tip FROM lsif_uploads"))
 	if err != nil {
-		t.Fatalf("unexpected error while selecting dump visibility: %s", err)
-	}
-	defer rows.Close()
-
-	visibility := map[int]bool{}
-	for rows.Next() {
-		var id int
-		var visibleAtTip bool
-		if err := rows.Scan(&id, &visibleAtTip); err != nil {
-			t.Fatalf("unexpected error while scanning dump visibility: %s", err)
-		}
-
-		visibility[id] = visibleAtTip
+		t.Fatalf("unexpected error while scanning dump visibility: %s", err)
 	}
 
-	return visibility
+	return visibilities
 }
 
 func makeCommit(i int) string {

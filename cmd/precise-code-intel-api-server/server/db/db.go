@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 
+	"github.com/keegancsmith/sqlf"
 	"github.com/sourcegraph/sourcegraph/internal/db/dbutil"
 )
 
@@ -36,4 +38,21 @@ func New(postgresDSN string) (DB, error) {
 	}
 
 	return &dbImpl{db: db}, nil
+}
+
+func (db *dbImpl) query(ctx context.Context, query *sqlf.Query) (*sql.Rows, error) {
+	return db.db.QueryContext(ctx, query.Query(sqlf.PostgresBindVar), query.Args()...)
+}
+
+func (db *dbImpl) queryRow(ctx context.Context, query *sqlf.Query) *sql.Row {
+	return db.db.QueryRowContext(ctx, query.Query(sqlf.PostgresBindVar), query.Args()...)
+}
+
+func (db *dbImpl) beginTx(ctx context.Context) (*transactionWrapper, error) {
+	tx, err := db.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &transactionWrapper{tx}, nil
 }

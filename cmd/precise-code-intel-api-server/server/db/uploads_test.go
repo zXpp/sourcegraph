@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -373,8 +374,8 @@ func TestDeleteUploadByIDUpdatesVisibility(t *testing.T) {
 		4: false,
 	}
 
-	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	if visibilities := getDumpVisibilities(t, db.db); !reflect.DeepEqual(visibilities, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 }
 
@@ -422,8 +423,8 @@ func TestUpdateDumpsVisibleFromTipOverlappingRootsSameIndexer(t *testing.T) {
 		6: false,
 	}
 
-	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	if visibilities := getDumpVisibilities(t, db.db); !reflect.DeepEqual(visibilities, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 }
 
@@ -477,8 +478,8 @@ func TestUpdateDumpsVisibleFromTipOverlappingRoots(t *testing.T) {
 		9: true,
 	}
 
-	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	if visibilities := getDumpVisibilities(t, db.db); !reflect.DeepEqual(visibilities, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 }
 
@@ -534,8 +535,8 @@ func TestUpdateDumpsVisibleFromTipBranchingPaths(t *testing.T) {
 		7: true,
 	}
 
-	if visibility := getDumpVisibility(t, db.db); !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	if visibilities := getDumpVisibilities(t, db.db); !reflect.DeepEqual(visibilities, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 }
 
@@ -560,20 +561,20 @@ func TestUpdateDumpsVisibleFromTipMaxTraversalLimit(t *testing.T) {
 
 	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(MaxTraversalLimit)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
-	} else if visibility, expected := getDumpVisibility(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	} else if visibilities, expected := getDumpVisibilities(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibilities, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 
 	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(1)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
-	} else if visibility, expected := getDumpVisibility(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	} else if visibilities, expected := getDumpVisibilities(t, db.db), map[int]bool{1: true}; !reflect.DeepEqual(visibilities, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 
 	if err := db.updateDumpsVisibleFromTip(nil, 50, makeCommit(0)); err != nil {
 		t.Fatalf("unexpected error updating dumps visible from tip: %s", err)
-	} else if visibility, expected := getDumpVisibility(t, db.db), map[int]bool{1: false}; !reflect.DeepEqual(visibility, expected) {
-		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibility)
+	} else if visibilities, expected := getDumpVisibilities(t, db.db), map[int]bool{1: false}; !reflect.DeepEqual(visibilities, expected) {
+		t.Errorf("unexpected visibility. want=%v have=%v", expected, visibilities)
 	}
 }
 
@@ -598,11 +599,11 @@ func TestResetStalled(t *testing.T) {
 		Upload{ID: 5, State: "processing", StartedAt: &t5},
 	)
 
-	tx, err := db.db.Begin()
+	tx, err := db.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Row lock upload 5 in a transaction which should be skipped by ResetStalled
 	if _, err := tx.Query(`SELECT * FROM lsif_uploads WHERE id = 5 FOR UPDATE`); err != nil {
