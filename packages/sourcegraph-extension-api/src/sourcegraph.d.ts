@@ -698,6 +698,33 @@ declare module 'sourcegraph' {
     }
 
     /**
+     * A view is a page or partial page.
+     */
+    export interface View {
+        /** The title of the view. */
+        title: string
+
+        /**
+         * The content sections of the view. The sections are rendered in order.
+         */
+        content: MarkupContent[]
+    }
+
+    /**
+     * A view provider registered with {@link sourcegraph.app.registerViewProvider}.
+     */
+    export interface ViewProvider {
+        /**
+         * Provide content for a view.
+         *
+         * @param document The document in which the command was invoked.
+         * @param position The position at which the command was invoked.
+         * @returns The view content.
+         */
+        provideView(): ProviderResult<View>
+    }
+
+    /**
      * The client application that is running the extension.
      */
     export namespace app {
@@ -738,6 +765,15 @@ declare module 'sourcegraph' {
          * text editors using {@link setDecorations}.
          */
         export function createDecorationType(): TextDocumentDecorationType
+
+        /**
+         * Register a view provider, which provides the contents of a view.
+         *
+         * @param id The ID of the view.
+         * @param provider A view provider.
+         * @returns An unsubscribable to unregister this provider.
+         */
+        export function registerViewProvider(id: string, provider: ViewProvider): Unsubscribable
     }
 
     /**
